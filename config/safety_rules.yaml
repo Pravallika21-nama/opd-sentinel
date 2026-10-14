@@ -1,0 +1,4 @@
+# Safety-Rule Layer. Behaviour is implemented in Phase 3.
+# A rule may only keep or raise urgency. A lower level number is more urgent.
+# clinically_reviewed stays false until a clinician reviews the threshold.
+rules: []

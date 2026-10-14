@@ -1,0 +1,3 @@
+# Red-flag lexicon. Behaviour is implemented in Phase 3.
+# Phrases will include transliterated variants. A match is not a diagnosis.
+flags: []

@@ -1,0 +1,23 @@
+.venv/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+.eggs/
+dist/
+build/
+.env
+*.db
+.coverage
+htmlcov/
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+.vite/
+
+# Official intake files stay local. Synthetic and processed outputs are tracked
+# only when a later phase explicitly adds a small labelled sample.
+data/raw/*
+!data/raw/.gitkeep

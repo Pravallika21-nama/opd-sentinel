@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Segoe UI", "Helvetica Neue", sans-serif;
+  --color-ink: #14202b;
+  --color-paper: #f3f0e8;
+  --color-card: #fffdf8;
+  --color-line: #d5d0c6;
+  --color-teal: #0e4d5c;
+  --color-alert: #8c2f2f;
+}
+
+body {
+  margin: 0;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-teal);
+  outline-offset: 2px;
+}

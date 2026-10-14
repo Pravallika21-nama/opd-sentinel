@@ -1,0 +1,34 @@
+# Non-clinical project settings.
+# Clinical thresholds live in safety_rules.yaml and validation_ranges.yaml.
+# Every clinical threshold is a placeholder until a clinician reviews it.
+
+project_name: OPD Sentinel
+random_seed: 42
+
+splits:
+  train: 0.70
+  val: 0.15
+  test: 0.15
+
+data:
+  # Official intake file. Git-ignored. The file headers are unknown until the
+  # organiser file is added — do not guess them. The keys below are the
+  # logical fields from the problem statement, not official column names.
+  official_path: data/raw/intake.csv
+  # Local stand-in used only when the official file is absent.
+  synthetic_path: data/synthetic/intake_synthetic.csv
+  column_map:
+    age: null
+    sex: null
+    systolic_bp: null
+    diastolic_bp: null
+    pulse: null
+    temperature_c: null
+    spo2: null
+    complaint: null
+    known_conditions: null
+    medications: null
+    # Hidden labels. Never pass these into the feature matrix.
+    triage_level: null
+    department: null
+    emergency: null

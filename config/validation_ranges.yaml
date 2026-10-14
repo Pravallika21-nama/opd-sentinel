@@ -1,0 +1,4 @@
+# Plausibility ranges. Behaviour is implemented in Phase 2.
+# The validator preserves the raw entry and does not silently correct it.
+# Every threshold is a placeholder until a clinician reviews it.
+fields: {}
