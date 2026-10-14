@@ -47,8 +47,14 @@ export type QueueItem = {
   abstain: boolean;
   illustrative: boolean;
   complaint_preview: string;
-  review_status: "pending" | "confirmed" | "overridden";
+  review_status: "pending" | "confirmed" | "overridden" | "escalated";
   source_label: string | null;
+  suggested_level?: number | null;
+  data_quality?: "ok" | "warning";
+  red_flag?: boolean;
+  reassessment?: "none" | "requested";
+  position_reason?: string;
+  rank?: number;
 };
 
 const base = () => import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";

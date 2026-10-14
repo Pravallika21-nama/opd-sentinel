@@ -1,32 +1,33 @@
 import { useState } from "react";
 import { LocaleProvider } from "./lib/i18n";
 import { AppShell, type Page } from "./components/AppShell";
-import { HealthPage } from "./pages/HealthPage";
-import { IntakePage } from "./pages/IntakePage";
+import { LiveTriagePage } from "./pages/LiveTriagePage";
 import { QueuePage } from "./pages/QueuePage";
-import { CasePage } from "./pages/CasePage";
+import { RecordsPage } from "./pages/RecordsPage";
 import { RulesPage } from "./pages/RulesPage";
 import { EvaluationPage } from "./pages/EvaluationPage";
+import { AuditPage } from "./pages/AuditPage";
+import { SettingsPage } from "./pages/SettingsPage";
 
 export function App() {
-  const [page, setPage] = useState<Page>("intake");
+  const [page, setPage] = useState<Page>("live");
   const [caseId, setCaseId] = useState<string | null>(null);
 
-  function openCase(id: string) {
+  function openRecord(id: string) {
     setCaseId(id);
-    setPage("case");
+    setPage("records");
   }
 
   return (
     <LocaleProvider>
       <AppShell page={page} onNavigate={setPage}>
-        {page === "intake" ? <IntakePage onOpenCase={openCase} /> : null}
-        {page === "queue" ? <QueuePage onOpen={openCase} /> : null}
-        {page === "case" && caseId ? <CasePage caseId={caseId} /> : null}
-        {page === "case" && !caseId ? <p>Select a case from the queue.</p> : null}
+        {page === "live" ? <LiveTriagePage /> : null}
+        {page === "queue" ? <QueuePage onOpen={openRecord} /> : null}
+        {page === "records" ? <RecordsPage caseId={caseId} onOpen={setCaseId} /> : null}
         {page === "rules" ? <RulesPage /> : null}
         {page === "evaluation" ? <EvaluationPage /> : null}
-        {page === "status" ? <HealthPage /> : null}
+        {page === "audit" ? <AuditPage onOpen={openRecord} /> : null}
+        {page === "settings" ? <SettingsPage /> : null}
       </AppShell>
     </LocaleProvider>
   );

@@ -78,40 +78,56 @@ def triage_and_store(intake: IntakeRequest, *, case_id: str | None = None) -> Tr
 
 
 def list_queue() -> list[QueueItem]:
-    """Priority order: abstentions and levels 1–2 first, then level, then arrival."""
+    """Priority order: abstentions and levels 1–2 first, then level, then arrival.
+
+    A Nurse Review level replaces the suggestion in the working order.
+    A reassessment request does not change urgency.
+    """
     with session_scope() as session:
         cases = session.scalars(select(CaseRecord)).all()
         items: list[QueueItem] = []
         for case in cases:
             prediction = _latest_prediction(session, case.id)
-            review = _latest_review(session, case.id)
+            reviews = list(
+                session.scalars(
+                    select(NurseReviewRecord)
+                    .where(NurseReviewRecord.case_id == case.id)
+                    .order_by(NurseReviewRecord.created_at.asc())
+                ).all()
+            )
             output = json.loads(prediction.output_json) if prediction else {}
-            status: Literal["pending", "confirmed", "overridden"]
-            if review is None:
-                status = "pending"
-            elif review.action == "override":
-                status = "overridden"
-            else:
-                status = "confirmed"
+            status, level, reassessment = _queue_state(output, reviews)
+            issues = output.get("validation_issues") or []
+            warning = any(
+                isinstance(item, dict) and item.get("status") not in {None, "ok"} for item in issues
+            )
             arrival = datetime.fromisoformat(case.arrival_time)
             if arrival.tzinfo is None:
                 arrival = arrival.replace(tzinfo=UTC)
             wait = (datetime.now(UTC) - arrival).total_seconds()
+            suggested = output.get("triage_level")
             items.append(
                 QueueItem(
                     id=case.id,
                     arrival_time=case.arrival_time,
                     wait_seconds=max(0.0, round(wait, 1)),
-                    triage_level=output.get("triage_level"),
+                    triage_level=level,
+                    suggested_level=int(suggested) if suggested is not None else None,
                     department=output.get("department"),
                     abstain=bool(output.get("abstain")),
                     illustrative=bool(case.illustrative),
                     complaint_preview=case.complaint_preview,
                     review_status=status,
                     source_label=output.get("source_label"),
+                    data_quality="warning" if warning else "ok",
+                    red_flag=bool(output.get("red_flags")),
+                    reassessment=reassessment,
                 )
             )
     items.sort(key=_queue_key)
+    for index, item in enumerate(items, start=1):
+        item.rank = index
+        item.position_reason = _position_reason(item)
     return items
 
 
@@ -152,39 +168,7 @@ def review_case(case_id: str, review: ReviewRequest) -> dict[str, Any]:
             raise HTTPException(status_code=404, detail="Case not found")
         prediction = _latest_prediction(session, case_id)
         output = json.loads(prediction.output_json) if prediction else {}
-        level: int | None
-        if review.action == "override":
-            if review.triage_level is None:
-                raise HTTPException(
-                    status_code=422,
-                    detail={
-                        "message": "An override needs a triage level.",
-                        "errors": [
-                            {"field": "triage_level", "message": "Required when overriding."}
-                        ],
-                    },
-                )
-            level = review.triage_level
-            department = review.department or output.get("department")
-        else:
-            suggested = output.get("triage_level")
-            level = int(suggested) if suggested is not None else None
-            if level is None:
-                raise HTTPException(
-                    status_code=422,
-                    detail={
-                        "message": (
-                            "There is no suggested level to confirm. Override with a level instead."
-                        ),
-                        "errors": [
-                            {
-                                "field": "triage_level",
-                                "message": "Required because the suggestion abstained.",
-                            }
-                        ],
-                    },
-                )
-            department = output.get("department")
+        level, department, event = _review_decision(review, output)
         created = _now()
         session.add(
             NurseReviewRecord(
@@ -201,13 +185,15 @@ def review_case(case_id: str, review: ReviewRequest) -> dict[str, Any]:
             AuditRecord(
                 case_id=case_id,
                 created_at=created,
-                event="nurse_review",
+                event=event,
                 payload_json=json.dumps(
                     {
                         "action": review.action,
                         "triage_level": level,
+                        "suggested_level": output.get("triage_level"),
                         "department": department,
                         "reason": review.reason,
+                        "actor": "nurse",
                     }
                 ),
             )
@@ -254,6 +240,104 @@ def seed_demo_cases() -> int:
     return added
 
 
+def _review_decision(
+    review: ReviewRequest, output: dict[str, Any]
+) -> tuple[int | None, str | None, str]:
+    """Return the stored level, department, and audit event for a Nurse Review."""
+    if review.action == "reassess":
+        return None, output.get("department"), "reassess"
+    if review.action == "escalate":
+        return 1, output.get("department"), "escalate"
+    if review.action == "override":
+        if review.triage_level is None:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "message": "An override needs a triage level.",
+                    "errors": [{"field": "triage_level", "message": "Required when overriding."}],
+                },
+            )
+        return review.triage_level, review.department or output.get("department"), "nurse_review"
+    suggested = output.get("triage_level")
+    level = int(suggested) if suggested is not None else None
+    if level is None:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "There is no suggested level to confirm. Override with a level instead.",
+                "errors": [
+                    {
+                        "field": "triage_level",
+                        "message": "Required because the suggestion abstained.",
+                    }
+                ],
+            },
+        )
+    return level, output.get("department"), "nurse_review"
+
+
+def _queue_state(
+    output: dict[str, Any], reviews: list[NurseReviewRecord]
+) -> tuple[
+    Literal["pending", "confirmed", "overridden", "escalated"],
+    int | None,
+    Literal["none", "requested"],
+]:
+    """Working level, review status, and whether reassessment was requested later."""
+    suggested = output.get("triage_level")
+    level = int(suggested) if suggested is not None else None
+    status: Literal["pending", "confirmed", "overridden", "escalated"] = "pending"
+    decision_at = ""
+    for review in reviews:
+        if review.action == "reassess":
+            continue
+        decision_at = review.created_at
+        if review.triage_level is not None:
+            level = review.triage_level
+        if review.action == "override":
+            status = "overridden"
+        elif review.action == "escalate":
+            status = "escalated"
+        else:
+            status = "confirmed"
+    reassessment: Literal["none", "requested"] = "none"
+    if any(review.action == "reassess" and review.created_at >= decision_at for review in reviews):
+        reassessment = "requested"
+    return status, level, reassessment
+
+
+def _position_reason(item: QueueItem) -> str:
+    """Explain the working order. This is not a predicted waiting time."""
+    if item.abstain and item.triage_level is None:
+        reason = "Ahead of routine cases because the case could not be assessed."
+    elif item.review_status == "escalated":
+        reason = "Nurse Review escalated this case to level 1."
+    elif item.review_status == "overridden":
+        reason = (
+            f"Nurse Review set level {item.triage_level}. "
+            "Within the same level, earlier arrival is ahead."
+        )
+    elif item.review_status == "confirmed" and item.triage_level is not None:
+        reason = (
+            f"Nurse Review confirmed level {item.triage_level}. "
+            "Within the same level, earlier arrival is ahead."
+        )
+    elif item.triage_level is not None and item.triage_level <= 2:
+        reason = (
+            f"Suggested level {item.triage_level} is pinned ahead of routine cases. "
+            "Within the same level, earlier arrival is ahead."
+        )
+    elif item.triage_level is not None:
+        reason = (
+            f"Suggested level {item.triage_level}. Within the same level, earlier arrival is ahead."
+        )
+    else:
+        reason = "No level yet. The case stays visible for Nurse Review."
+    if item.reassessment == "requested":
+        reason += " Reassessment was requested. A timer does not change urgency."
+    return reason
+
+
 def _latest_prediction(session: Any, case_id: str) -> PredictionRecord | None:
     return session.scalar(
         select(PredictionRecord)
@@ -272,5 +356,5 @@ def _latest_review(session: Any, case_id: str) -> NurseReviewRecord | None:
 
 def _queue_key(item: QueueItem) -> tuple[int, int, str]:
     pin = 0 if item.abstain or (item.triage_level is not None and item.triage_level <= 2) else 1
-    level = item.triage_level if item.triage_level is not None else 0
+    level = item.triage_level if item.triage_level is not None else 9
     return (pin, level, item.arrival_time)

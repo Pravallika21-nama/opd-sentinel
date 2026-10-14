@@ -52,7 +52,7 @@ class TriageResponse(TriageDecision):
 class ReviewRequest(BaseModel):
     """Nurse Review. A reason is required for confirm and for override."""
 
-    action: Literal["confirm", "override"]
+    action: Literal["confirm", "override", "escalate", "reassess"]
     reason: str = Field(min_length=3)
     triage_level: int | None = Field(default=None, ge=1, le=5)
     department: str | None = None
@@ -69,5 +69,11 @@ class QueueItem(BaseModel):
     abstain: bool
     illustrative: bool
     complaint_preview: str
-    review_status: Literal["pending", "confirmed", "overridden"]
+    review_status: Literal["pending", "confirmed", "overridden", "escalated"]
     source_label: str | None = None
+    suggested_level: int | None = None
+    data_quality: Literal["ok", "warning"] = "ok"
+    red_flag: bool = False
+    reassessment: Literal["none", "requested"] = "none"
+    position_reason: str = ""
+    rank: int = 0

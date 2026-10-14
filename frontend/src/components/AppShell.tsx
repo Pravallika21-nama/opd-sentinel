@@ -1,7 +1,14 @@
 import type { ReactNode } from "react";
 import { useLocale, type Locale } from "../lib/i18n";
 
-export type Page = "intake" | "queue" | "rules" | "evaluation" | "status" | "case";
+export type Page =
+  | "live"
+  | "queue"
+  | "records"
+  | "rules"
+  | "evaluation"
+  | "audit"
+  | "settings";
 
 const locales: Locale[] = ["en", "hi", "te"];
 
@@ -14,56 +21,72 @@ export function AppShell({
   onNavigate: (page: Page) => void;
   children: ReactNode;
 }) {
-  const { t, locale, setLocale } = useLocale();
+  const { t, locale, setLocale, compact } = useLocale();
   const items: { id: Page; label: string }[] = [
-    { id: "intake", label: t.intake },
+    { id: "live", label: t.live },
     { id: "queue", label: t.queue },
+    { id: "records", label: t.records },
     { id: "rules", label: t.rules },
     { id: "evaluation", label: t.evaluation },
-    { id: "status", label: t.status },
+    { id: "audit", label: t.auditNav },
+    { id: "settings", label: t.settings },
   ];
+
   return (
-    <div className="min-h-screen">
-      <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:bg-card focus:px-3 focus:py-2">
+    <div className={compact ? "compact min-h-screen" : "min-h-screen"}>
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-20 focus:bg-card focus:px-3 focus:py-2"
+      >
         Skip to content
       </a>
-      <header className="border-b border-line bg-card">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-teal">Decision support</p>
-            <p className="text-2xl font-semibold">OPD Sentinel</p>
+      <div className="lg:grid lg:grid-cols-[15rem_1fr]">
+        <aside className="border-b border-line bg-navy text-white lg:min-h-screen lg:border-b-0 lg:border-r">
+          <div className="px-4 py-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-sky-100">OPD operations</p>
+            <p className="text-xl font-semibold">OPD Sentinel</p>
+            <p className="mt-1 text-sm text-sky-100">Decision support. A nurse confirms every case.</p>
           </div>
-          <div className="flex gap-2" role="group" aria-label="Language">
-            {locales.map((item) => (
+          <nav className="flex gap-1 overflow-x-auto px-2 pb-3 lg:flex-col lg:px-3" aria-label="Main">
+            {items.map((item) => (
               <button
-                key={item}
+                key={item.id}
                 type="button"
-                className={`min-h-11 rounded-md border px-3 ${item === locale ? "bg-teal text-white" : "bg-card"}`}
-                aria-pressed={item === locale}
-                onClick={() => setLocale(item)}
+                className={`min-h-11 shrink-0 rounded-md px-3 text-left text-sm font-semibold ${
+                  page === item.id ? "bg-white text-navy" : "text-white hover:bg-white/10"
+                }`}
+                aria-current={page === item.id ? "page" : undefined}
+                onClick={() => onNavigate(item.id)}
               >
-                {item.toUpperCase()}
+                {item.label}
               </button>
             ))}
-          </div>
+          </nav>
+        </aside>
+        <div className="min-w-0">
+          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-card px-4 py-3">
+            <p className="text-sm text-ink">Does not diagnose. Does not replace a doctor.</p>
+            <div className="flex gap-2" role="group" aria-label="Language">
+              {locales.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  className={`min-h-10 rounded-md border px-3 text-sm font-semibold ${
+                    item === locale ? "border-action bg-action text-white" : "border-line bg-card"
+                  }`}
+                  aria-pressed={item === locale}
+                  onClick={() => setLocale(item)}
+                >
+                  {item.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </header>
+          <main id="main" className="px-4 py-4">
+            {children}
+          </main>
         </div>
-        <nav className="mx-auto flex max-w-6xl gap-2 overflow-x-auto px-4 pb-4" aria-label="Main">
-          {items.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`min-h-11 rounded-md px-4 font-semibold ${page === item.id ? "bg-teal text-white" : "bg-paper"}`}
-              aria-current={page === item.id ? "page" : undefined}
-              onClick={() => onNavigate(item.id)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </nav>
-      </header>
-      <main id="main" className="mx-auto max-w-6xl px-4 py-6">
-        {children}
-      </main>
+      </div>
     </div>
   );
 }

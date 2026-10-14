@@ -18,6 +18,10 @@ from core.config_loader import (
     load_validation_config,
 )
 from core.paths import repo_root
+from core.red_flags import find_red_flags
+from core.safety_rules import apply_safety_rules, rule_floor
+from core.validation import validate_intake
+from ml.predict import classical_available, quantum_available
 
 router = APIRouter()
 _BATCH_LIMIT = 30
@@ -96,6 +100,59 @@ def validation_ranges() -> dict[str, Any]:
         "clinically_reviewed": config.get("clinically_reviewed", False),
         "fields": config["fields"],
         "temperature_unit": config["temperature_unit"],
+    }
+
+
+@router.post("/rules/check")
+def rules_check(intake: IntakeRequest) -> dict[str, Any]:
+    """Run validation and the Safety-Rule Layer only. Nothing is stored."""
+    raw = intake.model_dump(mode="json")
+    validation = validate_intake(raw)
+    flags = find_red_flags(raw.get("complaint"))
+    fired = apply_safety_rules(validation, flags)
+    return {
+        "clinically_reviewed": False,
+        "banner": "PLACEHOLDER — CLINICAL REVIEW REQUIRED",
+        "validation_issues": [issue.model_dump() for issue in validation.fields.values()],
+        "red_flags": [flag.model_dump() for flag in flags],
+        "fired_rules": [rule.model_dump() for rule in fired],
+        "rule_level": rule_floor(fired),
+        "unassessable": validation.unassessable,
+        "note": "Safety-Rule Layer only. Classical ML and Quantum ML are not applied.",
+    }
+
+
+@router.get("/system")
+def system_status() -> dict[str, Any]:
+    """Versions and availability. Missing artefacts stay Pending. No scores are invented."""
+    settings = load_settings()
+    root = repo_root()
+    manifest_path = root / settings["data"]["processed_dir"] / "manifest.json"
+    data_source = "Pending"
+    if manifest_path.is_file():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        data_source = str(manifest.get("source_kind", "Pending"))
+    report = root / settings["reports"]["json"]
+    return {
+        "product": "OPD Sentinel",
+        "classical_available": classical_available(),
+        "quantum_available": quantum_available(),
+        "quantum_role": (
+            "Experimental simulator only. It is not the live decision and cannot lower urgency."
+        ),
+        "rules_clinically_reviewed": False,
+        "rules_banner": "PLACEHOLDER — CLINICAL REVIEW REQUIRED",
+        "data_source": data_source,
+        "evaluation_report": "present" if report.is_file() else "Pending",
+        "audit": (
+            "Append-only within the application's database permissions. "
+            "Not cryptographically immutable."
+        ),
+        "wait_time_estimate": "unavailable",
+        "complaint_note": (
+            "The complaint is stored as typed. Normalised text is machine assistance, "
+            "not a clinically validated translation."
+        ),
     }
 
 

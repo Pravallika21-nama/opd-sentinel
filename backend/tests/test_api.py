@@ -111,3 +111,45 @@ def test_rules_metrics_and_batch(client: TestClient) -> None:
     demo = client.get("/demo/cases")
     assert demo.status_code == 200
     assert "Example, not a real clinical outcome" in demo.json()["banner"]
+
+
+def test_rules_check_does_not_store_and_flags_hypoxia(client: TestClient) -> None:
+    before = client.get("/audit")
+    checked = client.post(
+        "/rules/check",
+        json={"spo2": 86, "complaint": "saans nahi le pa raha", "age": 67},
+    )
+    assert checked.status_code == 200
+    body = checked.json()
+    assert body["clinically_reviewed"] is False
+    assert body["rule_level"] == 1
+    assert any(rule["id"] == "spo2_below_90" for rule in body["fired_rules"])
+    after = client.get("/audit")
+    assert len(after.json()) == len(before.json())
+
+
+def test_escalate_is_audited_and_reassess_does_not_change_level(client: TestClient) -> None:
+    created = client.post(
+        "/triage",
+        json={"age": 40, "sex": "male", "spo2": 98, "pulse": 76, "complaint": "mild cough"},
+    )
+    assert created.status_code == 200
+    case_id = created.json()["case_id"]
+    escalated = client.post(
+        f"/queue/{case_id}/review",
+        json={"action": "escalate", "reason": "Nurse wants immediate assessment"},
+    )
+    assert escalated.status_code == 200
+    assert escalated.json()["triage_level"] == 1
+    reassess = client.post(
+        f"/queue/{case_id}/review",
+        json={"action": "reassess", "reason": "Need a repeat blood pressure"},
+    )
+    assert reassess.status_code == 200
+    queued = client.get("/queue").json()
+    row = next(item for item in queued if item["id"] == case_id)
+    assert row["triage_level"] == 1
+    assert row["reassessment"] == "requested"
+    assert "timer does not change urgency" in row["position_reason"]
+    events = [item["event"] for item in client.get("/audit", params={"case_id": case_id}).json()]
+    assert events == ["triage", "escalate", "reassess"]

@@ -18,6 +18,11 @@ const keys = [
   "missed_emergencies",
   "false_alerts",
   "cost",
+  "n",
+  "n_emergencies",
+  "false_negative_rate",
+  "nurse_override_rate",
+  "model_disagreement_count",
   "triage_level_accuracy",
   "department_accuracy",
   "abstention_rate",
@@ -41,7 +46,12 @@ export function EvaluationPage() {
   const data = report.data;
   return (
     <section className="flex flex-col gap-4">
-      <h1 className="text-3xl font-semibold">{t.evaluation}</h1>
+      <h1 className="text-xl font-semibold">Evaluation & Research</h1>
+      <p className="max-w-3xl text-sm">
+        Figures come only from reports/results.json. A missing cell is Pending. This is not clinical evidence.
+        When the evaluation kind is a proxy, the rows are a local experiment on the labelled data source below.
+        Quantum ML is experimental and is not the live decision.
+      </p>
       <p>{data.disclaimer ?? "Pending"}</p>
       <p>Data source: {data.data_source ?? "Pending"}</p>
       <p>Evaluation kind: {data.evaluation_kind ?? "Pending"}</p>
