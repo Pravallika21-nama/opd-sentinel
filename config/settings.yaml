@@ -11,13 +11,15 @@ splits:
   test: 0.15
 
 data:
-  # Official intake file. Git-ignored. The file headers are unknown until the
-  # organiser file is added — do not guess them. The keys below are the
-  # logical fields from the problem statement, not official column names.
+  # Official intake file. Git-ignored. Headers are unknown until the organiser
+  # file is added — do not guess them. null means "this file already uses the
+  # logical field name". Replace nulls with real headers when the file arrives.
   official_path: data/raw/intake.csv
-  # Local stand-in used only when the official file is absent.
   synthetic_path: data/synthetic/intake_synthetic.csv
+  arrivals_synthetic_path: data/synthetic/arrivals_synthetic.csv
+  processed_dir: data/processed
   column_map:
+    case_id: null
     age: null
     sex: null
     systolic_bp: null
@@ -28,7 +30,71 @@ data:
     complaint: null
     known_conditions: null
     medications: null
+    record_source: null
     # Hidden labels. Never pass these into the feature matrix.
     triage_level: null
     department: null
     emergency: null
+
+synthetic:
+  rows: 2400
+  emergency_rate: 0.04
+  seed: 42
+
+abstention:
+  # Placeholder. Not clinically reviewed.
+  clinically_reviewed: false
+  # Uncertainty is 0 at probability 0 or 1, and 1 at probability 0.5.
+  max_uncertainty: 0.85
+  message: "Cannot assess, send to nurse now"
+
+classical:
+  emergency_class_weight: 20
+  tfidf_max_features: 600
+  tfidf_ngram_min: 2
+  tfidf_ngram_max: 4
+
+quantum:
+  # PennyLane default.qubit simulator only. No speedup is claimed.
+  # No accuracy advantage is assumed.
+  simulator: default.qubit
+  n_features: 4
+  n_layers: 2
+  data_reupload: false
+  run_kernel_variant: false
+  max_train_rows: 48
+  max_val_rows: 24
+  min_positive_train: 12
+  epochs: 4
+  batch_size: 8
+  stepsize: 0.2
+  patience: 2
+  timeout_seconds: 0.75
+
+evaluation:
+  # Local proxy used only when an official evaluate.py is absent.
+  kind: proxy
+  undertriage_emergency_weight: 20
+  overtriage_weight: 1
+  emergency_levels: [1, 2]
+  bootstrap_samples: 200
+  official_candidates:
+    - evaluate.py
+    - official/evaluate.py
+
+queue_sim:
+  # Assumptions for the stretch simulation. Not a measurement of a real clinic.
+  n_servers: 2
+  service_minutes: 6
+  arrivals: 800
+
+artifacts:
+  classical: backend/ml/artifacts/classical.joblib
+  classical_meta: backend/ml/artifacts/classical_meta.json
+  quantum: backend/ml/artifacts/quantum.joblib
+  quantum_meta: backend/ml/artifacts/quantum_meta.json
+
+reports:
+  json: reports/results.json
+  markdown: reports/results.md
+  figures: reports/figures

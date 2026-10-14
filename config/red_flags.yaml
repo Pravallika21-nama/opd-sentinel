@@ -1,3 +1,137 @@
-# Red-flag lexicon. Behaviour is implemented in Phase 3.
-# Phrases will include transliterated variants. A match is not a diagnosis.
-flags: []
+# Red-flag lexicon. A match is not a diagnosis.
+# Languages: English, Hindi (roman and Devanagari), Telugu (roman and script),
+# and a small Tamil set. This is not a general translator.
+# Negation: English tokens are checked before the phrase ("no chest pain").
+# Hindi/Telugu tokens are checked after the phrase ("dard nahi", "noppi ledu").
+# "nahi" inside a listed symptom phrase such as "saans nahi" is not a negation.
+
+negation:
+  before:
+    # Quoted: unquoted `no` is a YAML boolean and would be stored as false.
+    - "no"
+    - "not"
+    - without
+    - denies
+    - denied
+    - never
+  after:
+    - nahi
+    - nahin
+    - nhi
+    - ledu
+    - ledhu
+    - kadu
+    - नहीं
+    - లేదు
+
+flags:
+  - id: chest_pain
+    label: Chest pain
+    phrases:
+      - chest pain
+      - chestpain
+      - seene mein dard
+      - seene me dard
+      - sine mein dard
+      - seena dard
+      - सीने में दर्द
+      - सीने मे दर्द
+      - gunde noppi
+      - గుండె నొప్పి
+      - nenju vali
+      - நெஞ்சு வலி
+      - hridaya vedana
+
+  - id: breathlessness
+    label: Breathlessness
+    phrases:
+      - short of breath
+      - shortness of breath
+      - breathless
+      - cannot breathe
+      - cant breathe
+      - saans nahi
+      - saans phool
+      - saans lene mein
+      - सांस नहीं आ रही
+      - सांस फूल
+      - swasa aadatam ledu
+      - swasa ledu
+      - ఊపిరి ఆడటం లేదు
+      - moochu vida mudiyala
+
+  - id: unconscious
+    label: Unconsciousness
+    phrases:
+      - unconscious
+      - unresponsive
+      - not responding
+      - behosh
+      - behos
+      - besudhi
+      - बेहोश
+      - sutti poyindi
+      - sustu poyadu
+      - స్పృహ లేదు
+      - mayakkam
+
+  - id: seizure
+    label: Seizure
+    phrases:
+      - seizure
+      - convulsion
+      - daura pada
+      - daura
+      - fit vachindi
+      - fits aaye
+      - दौरा
+      - ఫిట్ వచ్చింది
+
+  - id: severe_bleeding
+    label: Severe bleeding
+    phrases:
+      - severe bleeding
+      - bleeding heavily
+      - heavy bleeding
+      - khoon beh
+      - khoon bahut
+      - raktham poyindi
+      - raktham ekkuva
+      - खून बह
+      - రక్తం పోతుంది
+
+  - id: stroke
+    label: Stroke signs
+    phrases:
+      - slurred speech
+      - face droop
+      - face drooping
+      - one side weak
+      - muh tedha
+      - bol nahi pa raha
+      - lakwa
+      - pakshaghat
+      - लकवा
+      - నోరు వంకర
+
+  - id: severe_abdominal_pain
+    label: Severe abdominal pain
+    phrases:
+      - severe abdominal
+      - severe stomach
+      - pet mein bahut dard
+      - pet me bahut dard
+      - kadupu noppi ekkuva
+      - కడుపు నొప్పి ఎక్కువ
+      - पेट में बहुत दर्द
+
+  - id: poisoning
+    label: Poisoning
+    phrases:
+      - poisoning
+      - drank poison
+      - poison kha
+      - zeher
+      - visham
+      - जहर
+      - విషం

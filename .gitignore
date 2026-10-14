@@ -4,6 +4,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
+.hypothesis/
 *.egg-info/
 .eggs/
 dist/
@@ -17,7 +18,16 @@ frontend/dist/
 *.tsbuildinfo
 .vite/
 
-# Official intake files stay local. Synthetic and processed outputs are tracked
-# only when a later phase explicitly adds a small labelled sample.
+# Official intake files stay local. Generated synthetic splits and model files
+# are produced by make data / make train / make eval.
 data/raw/*
 !data/raw/.gitkeep
+data/synthetic/*.csv
+data/processed/*
+!data/processed/.gitkeep
+backend/ml/artifacts/*
+!backend/ml/artifacts/.gitkeep
+reports/results.json
+reports/results.md
+reports/figures/*
+!reports/figures/.gitkeep

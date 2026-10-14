@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchHealth } from "../api/health";
 
-const pendingWork = [
-  ["Classical ML", "Pending"],
-  ["Quantum ML", "Pending. Experimental, simulator only."],
-  ["Safety-Rule Layer", "Pending"],
-  ["Evaluation", "Pending"],
+const statusRows = [
+  ["Classical ML", "Live path. A score exists only after make train."],
+  ["Quantum ML", "Experimental, simulator only. No advantage is claimed."],
+  ["Safety-Rule Layer", "Loaded from config. Thresholds are not clinically reviewed."],
+  ["Evaluation", "Open Evaluation. It reads reports/results.json. Missing cells stay Pending."],
 ] as const;
 
 export function HealthPage() {
@@ -15,7 +15,7 @@ export function HealthPage() {
   });
 
   return (
-    <main id="main" className="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 px-6 py-10">
+    <section className="flex flex-col gap-8">
       <header className="flex flex-col gap-3">
         <p className="text-sm font-semibold uppercase tracking-wide text-teal">
           Outpatient decision support
@@ -57,7 +57,7 @@ export function HealthPage() {
           Build status
         </h2>
         <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[12rem_1fr]">
-          {pendingWork.map(([name, status]) => (
+          {statusRows.map(([name, status]) => (
             <div key={name} className="contents">
               <dt className="font-semibold">{name}</dt>
               <dd>{status}</dd>
@@ -65,6 +65,6 @@ export function HealthPage() {
           ))}
         </dl>
       </section>
-    </main>
+    </section>
   );
 }

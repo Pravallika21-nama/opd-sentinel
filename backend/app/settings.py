@@ -22,6 +22,8 @@ class Settings(BaseSettings):
 
     api_host: str = "127.0.0.1"
     api_port: int = 8000
+    database_path: str = "data/sentinel.db"
+    seed_demo: bool = False
     cors_origins: list[str] = Field(
         default_factory=lambda: [
             "http://localhost:5173",

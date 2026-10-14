@@ -3,8 +3,10 @@
 
 ifeq ($(OS),Windows_NT)
 PY := .venv/Scripts/python.exe
+SYS_PY := py -3.12
 else
 PY := .venv/bin/python
+SYS_PY := python3
 endif
 
 .PHONY: help setup data train eval api web test demo lint
@@ -21,7 +23,7 @@ help:
 	@echo   make demo    Walk through the demo flow (Phase 11)
 
 setup:
-	python -m venv .venv
+	$(SYS_PY) -m venv .venv
 	$(PY) -m pip install --upgrade pip
 	$(PY) -m pip install -e ".[dev,ml]"
 	$(PY) -m pre_commit install

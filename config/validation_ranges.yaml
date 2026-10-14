@@ -1,4 +1,45 @@
-# Plausibility ranges. Behaviour is implemented in Phase 2.
-# The validator preserves the raw entry and does not silently correct it.
+# Plausibility ranges. The validator preserves the raw entry and does not convert units.
 # Every threshold is a placeholder until a clinician reviews it.
-fields: {}
+clinically_reviewed: false
+
+fields:
+  age:
+    min: 0
+    max: 120
+    unit: years
+  systolic_bp:
+    min: 60
+    max: 250
+    unit: mmHg
+  diastolic_bp:
+    min: 30
+    max: 150
+    unit: mmHg
+  pulse:
+    min: 30
+    max: 220
+    unit: bpm
+  temperature_c:
+    min: 30
+    max: 43
+    unit: C
+  spo2:
+    min: 50
+    max: 100
+    unit: percent
+
+temperature_unit:
+  # A value inside this window and outside the Celsius window is flagged
+  # conflicting (possible Fahrenheit entry). It is not converted.
+  fahrenheit_min: 86
+  fahrenheit_max: 110
+
+unassessable:
+  # Placeholder policy, not clinically reviewed.
+  # Empty complaint plus this many unusable critical fields -> abstain.
+  critical_fields:
+    - systolic_bp
+    - pulse
+    - spo2
+    - temperature_c
+  min_bad_critical_fields: 3

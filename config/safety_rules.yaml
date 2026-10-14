@@ -1,4 +1,433 @@
-# Safety-Rule Layer. Behaviour is implemented in Phase 3.
+# Safety-Rule Layer.
 # A rule may only keep or raise urgency. A lower level number is more urgent.
 # clinically_reviewed stays false until a clinician reviews the threshold.
-rules: []
+# Field comparisons run only when that field's validation status is ok,
+# so a mistyped value (BP 0, temp 96, SpO2 150) cannot force a level by itself.
+# `example` is the unit-test intake that must fire this rule. It is not a case history.
+
+rules:
+  - id: spo2_below_90
+    description: SpO2 under 90 percent
+    condition:
+      field: spo2
+      op: lt
+      value: 90
+      require_status: ok
+    min_level: 1
+    reason: "SpO2 is below 90. Placeholder threshold, not clinically reviewed."
+    clinically_reviewed: false
+    example:
+      age: 54
+      sex: female
+      systolic_bp: 118
+      diastolic_bp: 76
+      pulse: 88
+      temperature_c: 36.8
+      spo2: 85
+      complaint: "feels unwell"
+
+  - id: spo2_below_94
+    description: SpO2 under 94 percent
+    condition:
+      field: spo2
+      op: lt
+      value: 94
+      require_status: ok
+    min_level: 2
+    reason: "SpO2 is below 94. Placeholder threshold, not clinically reviewed."
+    clinically_reviewed: false
+    example:
+      age: 54
+      sex: male
+      systolic_bp: 122
+      diastolic_bp: 78
+      pulse: 84
+      temperature_c: 36.9
+      spo2: 92
+      complaint: "mild cough"
+
+  - id: shock_low_sbp_high_pulse
+    description: Low systolic pressure with a fast pulse
+    condition:
+      all:
+        - field: systolic_bp
+          op: lt
+          value: 90
+          require_status: ok
+        - field: pulse
+          op: gt
+          value: 110
+          require_status: ok
+    min_level: 1
+    reason: "Systolic pressure is under 90 with pulse over 110. Placeholder, not clinically reviewed."
+    clinically_reviewed: false
+    example:
+      age: 61
+      sex: male
+      systolic_bp: 82
+      diastolic_bp: 54
+      pulse: 124
+      temperature_c: 36.6
+      spo2: 96
+      complaint: "dizzy"
+
+  - id: pulse_above_130
+    description: Pulse over 130
+    condition:
+      field: pulse
+      op: gt
+      value: 130
+      require_status: ok
+    min_level: 1
+    reason: "Pulse is over 130. Placeholder threshold, not clinically reviewed."
+    clinically_reviewed: false
+    example:
+      age: 40
+      sex: female
+      systolic_bp: 124
+      diastolic_bp: 80
+      pulse: 142
+      temperature_c: 37.1
+      spo2: 98
+      complaint: "palpitations"
+
+  - id: pulse_below_40
+    description: Pulse under 40
+    condition:
+      field: pulse
+      op: lt
+      value: 40
+      require_status: ok
+    min_level: 1
+    reason: "Pulse is under 40. Placeholder threshold, not clinically reviewed."
+    clinically_reviewed: false
+    example:
+      age: 72
+      sex: male
+      systolic_bp: 130
+      diastolic_bp: 70
+      pulse: 36
+      temperature_c: 36.5
+      spo2: 97
+      complaint: "very tired"
+
+  - id: pulse_above_120
+    description: Pulse over 120
+    condition:
+      field: pulse
+      op: gt
+      value: 120
+      require_status: ok
+    min_level: 2
+    reason: "Pulse is over 120. Placeholder threshold, not clinically reviewed."
+    clinically_reviewed: false
+    example:
+      age: 33
+      sex: female
+      systolic_bp: 128
+      diastolic_bp: 82
+      pulse: 125
+      temperature_c: 37.0
+      spo2: 98
+      complaint: "racing heart"
+
+  - id: temp_at_least_41
+    description: Temperature at least 41 C
+    condition:
+      field: temperature_c
+      op: gte
+      value: 41
+      require_status: ok
+    min_level: 1
+    reason: "Temperature is at least 41 C. Placeholder threshold, not clinically reviewed."
+    clinically_reviewed: false
+    example:
+      age: 28
+      sex: male
+      systolic_bp: 110
+      diastolic_bp: 70
+      pulse: 110
+      temperature_c: 41.2
+      spo2: 97
+      complaint: "high fever"
+
+  - id: temp_at_least_40
+    description: Temperature at least 40 C
+    condition:
+      field: temperature_c
+      op: gte
+      value: 40
+      require_status: ok
+    min_level: 2
+    reason: "Temperature is at least 40 C. Placeholder threshold, not clinically reviewed."
+    clinically_reviewed: false
+    example:
+      age: 28
+      sex: female
+      systolic_bp: 112
+      diastolic_bp: 72
+      pulse: 100
+      temperature_c: 40.3
+      spo2: 98
+      complaint: "fever"
+
+  - id: neonate_fever
+    description: Fever in a neonate (age under 3 months)
+    condition:
+      all:
+        - field: age
+          op: lt
+          value: 0.25
+          require_status: ok
+        - field: temperature_c
+          op: gte
+          value: 38
+          require_status: ok
+    min_level: 1
+    reason: "Neonate with temperature at least 38 C. Placeholder, not clinically reviewed."
+    clinically_reviewed: false
+    example:
+      age: 0.1
+      sex: male
+      systolic_bp: 80
+      diastolic_bp: 45
+      pulse: 140
+      temperature_c: 38.2
+      spo2: 98
+      complaint: "baby is warm"
+
+  - id: infant_fever
+    description: Fever in an infant (age under 1 year)
+    condition:
+      all:
+        - field: age
+          op: lt
+          value: 1
+          require_status: ok
+        - field: temperature_c
+          op: gte
+          value: 38.5
+          require_status: ok
+    min_level: 2
+    reason: "Infant with temperature at least 38.5 C. Placeholder, not clinically reviewed."
+    clinically_reviewed: false
+    example:
+      age: 0.6
+      sex: female
+      systolic_bp: 90
+      diastolic_bp: 55
+      pulse: 120
+      temperature_c: 38.8
+      spo2: 98
+      complaint: "baby ko bukhar"
+
+  - id: elderly_low_sbp
+    description: Low systolic pressure in an older adult
+    condition:
+      all:
+        - field: age
+          op: gte
+          value: 75
+          require_status: ok
+        - field: systolic_bp
+          op: lt
+          value: 100
+          require_status: ok
+    min_level: 2
+    reason: "Age 75 or older with systolic pressure under 100. Placeholder, not clinically reviewed."
+    clinically_reviewed: false
+    example:
+      age: 82
+      sex: female
+      systolic_bp: 96
+      diastolic_bp: 60
+      pulse: 78
+      temperature_c: 36.7
+      spo2: 97
+      complaint: "giddiness"
+
+  - id: elderly_tachycardia
+    description: Fast pulse in an older adult
+    condition:
+      all:
+        - field: age
+          op: gte
+          value: 80
+          require_status: ok
+        - field: pulse
+          op: gt
+          value: 110
+          require_status: ok
+    min_level: 2
+    reason: "Age 80 or older with pulse over 110. Placeholder, not clinically reviewed."
+    clinically_reviewed: false
+    example:
+      age: 84
+      sex: male
+      systolic_bp: 140
+      diastolic_bp: 80
+      pulse: 116
+      temperature_c: 36.8
+      spo2: 97
+      complaint: "weakness"
+
+  - id: very_high_bp
+    description: Very high blood pressure
+    condition:
+      any:
+        - field: systolic_bp
+          op: gte
+          value: 200
+          require_status: ok
+        - field: diastolic_bp
+          op: gte
+          value: 120
+          require_status: ok
+    min_level: 2
+    reason: "Blood pressure is at or above the placeholder severe threshold. Not clinically reviewed."
+    clinically_reviewed: false
+    example:
+      age: 58
+      sex: female
+      systolic_bp: 210
+      diastolic_bp: 110
+      pulse: 88
+      temperature_c: 36.8
+      spo2: 98
+      complaint: "headache"
+
+  - id: rf_chest_pain
+    description: Chest-pain red flag
+    condition:
+      red_flag: chest_pain
+    min_level: 2
+    reason: "Complaint matches a chest-pain red flag. Placeholder, not clinically reviewed."
+    clinically_reviewed: false
+    example:
+      age: 49
+      sex: male
+      systolic_bp: 130
+      diastolic_bp: 84
+      pulse: 90
+      temperature_c: 36.8
+      spo2: 98
+      complaint: "seene mein dard ho raha hai"
+
+  - id: rf_breathlessness
+    description: Breathlessness red flag
+    condition:
+      red_flag: breathlessness
+    min_level: 2
+    reason: "Complaint matches a breathlessness red flag. Placeholder, not clinically reviewed."
+    clinically_reviewed: false
+    example:
+      age: 57
+      sex: female
+      systolic_bp: 128
+      diastolic_bp: 80
+      pulse: 96
+      temperature_c: 37.0
+      spo2: 95
+      complaint: "saans nahi le pa raha"
+
+  - id: rf_unconscious
+    description: Unconsciousness red flag
+    condition:
+      red_flag: unconscious
+    min_level: 1
+    reason: "Complaint matches an unconsciousness red flag. Placeholder, not clinically reviewed."
+    clinically_reviewed: false
+    example:
+      age: 45
+      sex: male
+      systolic_bp: 110
+      diastolic_bp: 70
+      pulse: 88
+      temperature_c: 36.6
+      spo2: 96
+      complaint: "behosh ho gaya"
+
+  - id: rf_seizure
+    description: Seizure red flag
+    condition:
+      red_flag: seizure
+    min_level: 1
+    reason: "Complaint matches a seizure red flag. Placeholder, not clinically reviewed."
+    clinically_reviewed: false
+    example:
+      age: 22
+      sex: female
+      systolic_bp: 118
+      diastolic_bp: 76
+      pulse: 100
+      temperature_c: 37.0
+      spo2: 97
+      complaint: "daura pada at home"
+
+  - id: rf_severe_bleeding
+    description: Severe-bleeding red flag
+    condition:
+      red_flag: severe_bleeding
+    min_level: 1
+    reason: "Complaint matches a severe-bleeding red flag. Placeholder, not clinically reviewed."
+    clinically_reviewed: false
+    example:
+      age: 35
+      sex: male
+      systolic_bp: 100
+      diastolic_bp: 66
+      pulse: 108
+      temperature_c: 36.5
+      spo2: 97
+      complaint: "khoon beh raha hai from the wound"
+
+  - id: rf_stroke
+    description: Stroke-sign red flag
+    condition:
+      red_flag: stroke
+    min_level: 1
+    reason: "Complaint matches a stroke-sign red flag. Placeholder, not clinically reviewed."
+    clinically_reviewed: false
+    example:
+      age: 68
+      sex: female
+      systolic_bp: 150
+      diastolic_bp: 90
+      pulse: 84
+      temperature_c: 36.7
+      spo2: 97
+      complaint: "muh tedha ho gaya aur bol nahi pa raha"
+
+  - id: rf_severe_abdominal_pain
+    description: Severe abdominal-pain red flag
+    condition:
+      red_flag: severe_abdominal_pain
+    min_level: 2
+    reason: "Complaint matches a severe abdominal-pain red flag. Placeholder, not clinically reviewed."
+    clinically_reviewed: false
+    example:
+      age: 41
+      sex: male
+      systolic_bp: 124
+      diastolic_bp: 80
+      pulse: 90
+      temperature_c: 37.2
+      spo2: 98
+      complaint: "pet mein bahut dard hai"
+
+  - id: rf_poisoning
+    description: Poisoning red flag
+    condition:
+      red_flag: poisoning
+    min_level: 1
+    reason: "Complaint matches a poisoning red flag. Placeholder, not clinically reviewed."
+    clinically_reviewed: false
+    example:
+      age: 30
+      sex: female
+      systolic_bp: 120
+      diastolic_bp: 78
+      pulse: 104
+      temperature_c: 36.9
+      spo2: 98
+      complaint: "zeher kha liya"

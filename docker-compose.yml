@@ -8,6 +8,12 @@ services:
       - "8000:8000"
     environment:
       OPD_CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
+      OPD_SEED_DEMO: "1"
+      OPD_DATABASE_PATH: /app/data/sentinel.db
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+      - ./backend/ml/artifacts:/app/backend/ml/artifacts
     healthcheck:
       test:
         [

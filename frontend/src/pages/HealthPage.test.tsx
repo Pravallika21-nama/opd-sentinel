@@ -37,7 +37,7 @@ describe("HealthPage", () => {
     expect(await screen.findByText("ok")).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1, name: "OPD Sentinel" })).toBeInTheDocument();
     expect(screen.getByText("0.1.0")).toBeInTheDocument();
-    expect(screen.getAllByText("Pending")).toHaveLength(3);
+    expect(screen.getByText(/reads reports\/results.json/)).toBeInTheDocument();
   });
 
   it("shows unreachable when the API does not respond", async () => {

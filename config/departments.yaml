@@ -1,0 +1,52 @@
+# Keyword department hints.
+# Used only when Classical ML does not return a department.
+# A hint is not a diagnosis and is not clinically reviewed.
+
+hints:
+  - department: Cardiology
+    phrases:
+      - chest pain
+      - seene mein dard
+      - seene me dard
+      - सीने में दर्द
+      - gunde noppi
+      - గుండె నొప్పి
+      - nenju vali
+      - palpitations
+  - department: Pulmonology
+    phrases:
+      - saans nahi
+      - breathless
+      - short of breath
+      - cough
+      - khansi
+      - daggu
+  - department: Neurology
+    phrases:
+      - seizure
+      - daura
+      - muh tedha
+      - slurred speech
+      - behosh
+      - लकवा
+  - department: General Surgery
+    phrases:
+      - bleeding
+      - khoon beh
+      - wound
+      - pet mein bahut dard
+  - department: Pediatrics
+    phrases:
+      - baby
+      - bacha
+      - child
+  - department: Obstetrics
+    phrases:
+      - pregnant
+      - garbh
+      - pregnancy
+  - department: Emergency
+    phrases:
+      - zeher
+      - poison
+      - unconscious
