@@ -11,6 +11,7 @@ dist/
 build/
 .env
 *.db
+data/demo_credentials.txt
 .coverage
 htmlcov/
 node_modules/

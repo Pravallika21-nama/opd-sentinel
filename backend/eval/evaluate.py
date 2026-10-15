@@ -7,6 +7,7 @@ Until then, this module writes a local proxy and labels every score
 
 from __future__ import annotations
 
+import json
 import math
 import subprocess
 import sys
@@ -19,19 +20,24 @@ from core.config_loader import load_settings
 from core.paths import repo_root
 from core.schemas import TriageDecision
 from core.text import normalise_text
+from eval.external import external_mimic_demo
 from eval.metrics import (
     accuracy,
     binary_report,
     bootstrap_recall,
     calibration_table,
+    level_confusion,
+    per_level_report,
     subgroup_recall,
 )
 from eval.queue_sim import run_queue_sim
 from eval.report import write_reports
 from eval.robustness import robustness_table
 from eval.runtime_bench import time_calls
+from ml.classical import has_department_labels
 from ml.dataset import iter_intakes, load_split
-from ml.predict import load_classical, load_quantum
+from ml.ktas import REFERENCE_NURSE_FIELD
+from ml.predict import load_classical
 
 
 def _configure_stdio() -> None:
@@ -127,25 +133,13 @@ def _score_classical(bundle: Any, frame: pd.DataFrame) -> tuple[np.ndarray, np.n
     return probabilities, levels, departments
 
 
-def _pipeline_decisions(
-    frame: pd.DataFrame, classical: Any, quantum: Any, *, use_quantum: bool
-) -> list[TriageDecision]:
+def _pipeline_decisions(frame: pd.DataFrame, classical: Any) -> list[TriageDecision]:
     from core.arbitration import arbitrate
 
     decisions: list[TriageDecision] = []
     for intake in iter_intakes(frame):
-        classical_view = None if classical is None else classical.predict_intake(intake)
-        quantum_view = None
-        note = None
-        if use_quantum:
-            if quantum is None:
-                note = "Quantum ML unavailable"
-            else:
-                try:
-                    quantum_view = quantum.predict_intake(intake)
-                except Exception:
-                    note = "Quantum ML unavailable"
-        decisions.append(arbitrate(intake, classical_view, quantum_view, quantum_note=note))
+        view = None if classical is None else classical.predict_intake(intake)
+        decisions.append(arbitrate(intake, view))
     return decisions
 
 
@@ -185,6 +179,54 @@ def _abstention_block(decisions: list[TriageDecision], y_emergency: np.ndarray) 
     }
 
 
+def _manifest(settings: dict[str, Any]) -> dict[str, Any]:
+    path = repo_root() / settings["data"]["processed_dir"] / "manifest.json"
+    if not path.is_file():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return payload if isinstance(payload, dict) else {}
+
+
+def _nurse_reference(
+    test: pd.DataFrame,
+    y_emergency: np.ndarray,
+    y_level: np.ndarray,
+    *,
+    under: float,
+    over: float,
+    seed: int,
+    samples: int,
+) -> dict[str, Any]:
+    """Score the triage nurse's original level against the expert label, when recorded."""
+    if REFERENCE_NURSE_FIELD not in test.columns:
+        return {
+            "status": "Pending",
+            "reason": "This dataset does not record the original triage nurse level.",
+        }
+    nurse = pd.to_numeric(test[REFERENCE_NURSE_FIELD], errors="coerce")
+    mask = nurse.notna().to_numpy()
+    if not mask.any():
+        return {"status": "Pending", "reason": "No triage nurse level is recorded."}
+    levels = nurse.to_numpy()[mask].astype(int)
+    return _section_from_binary(
+        y_emergency[mask],
+        levels <= 2,
+        under=under,
+        over=over,
+        seed=seed,
+        samples=samples,
+        extra={
+            "triage_level_accuracy": accuracy(y_level[mask], levels),
+            "confusion_matrix": level_confusion(y_level[mask], levels),
+            "per_level": per_level_report(y_level[mask], levels),
+            "note": (
+                "The emergency nurse's recorded level on the same test rows, scored against "
+                "the expert label. A human reference, not a model."
+            ),
+        },
+    )
+
+
 def main() -> None:
     """Score the held-out test split and write reports. Missing models stay Pending."""
     _configure_stdio()
@@ -198,17 +240,13 @@ def main() -> None:
     intakes = iter_intakes(test)
     y_emergency = test["emergency"].to_numpy().astype(int)
     y_level = test["triage_level"].to_numpy().astype(int)
-    y_department = test["department"].astype(str).to_numpy()
-    manifest_path = repo_root() / settings["data"]["processed_dir"] / "manifest.json"
-    data_source = "unknown"
-    if manifest_path.is_file():
-        import json
-
-        data_source = json.loads(manifest_path.read_text(encoding="utf-8")).get(
-            "source_kind", "unknown"
-        )
+    department_labelled = has_department_labels(test)
+    y_department = (
+        test["department"].astype(str).to_numpy() if department_labelled else np.array([])
+    )
+    manifest = _manifest(settings)
+    data_source = str(manifest.get("source_kind", "unknown"))
     classical = load_classical()
-    quantum = load_quantum()
     sections: dict[str, Any] = {}
 
     if classical is None:
@@ -229,7 +267,18 @@ def main() -> None:
             samples=samples,
             extra={
                 "triage_level_accuracy": accuracy(y_level, level_pred),
-                "department_accuracy": accuracy(y_department, departments.astype(str)),
+                "confusion_matrix": level_confusion(y_level, level_pred),
+                "per_level": per_level_report(y_level, level_pred),
+                "department_accuracy": (
+                    accuracy(y_department, departments.astype(str))
+                    if department_labelled and classical.department_model is not None
+                    else None
+                ),
+                "department_note": (
+                    None
+                    if department_labelled
+                    else "The test data has no department label. Department accuracy is Pending."
+                ),
                 "calibration": calibration_table(y_emergency, probabilities),
                 "score_kind": "calibrated emergency probability, threshold chosen on validation",
             },
@@ -238,54 +287,21 @@ def main() -> None:
             "Classical ML test (proxy, not official): "
             f"recall={sections['classical']['emergency_recall']}, "
             f"missed={sections['classical']['missed_emergencies']}, "
+            f"false_alerts={sections['classical']['false_alerts']}, "
             f"cost={sections['classical']['cost']}"
         )
 
-    if quantum is None:
-        sections["quantum"] = {
-            "status": "Pending",
-            "reason": (
-                "Quantum ML artefact is not available. Simulator only; no advantage is claimed."
-            ),
-        }
-    else:
-        risks = []
-        q_levels = []
-        for intake in intakes:
-            view = quantum.predict_intake(intake)
-            risks.append(view.p_emergency)
-            q_levels.append(view.level)
-        q_levels_array = np.asarray(q_levels, dtype=int)
-        sections["quantum"] = _section_from_binary(
-            y_emergency,
-            q_levels_array <= 2,
-            under=under,
-            over=over,
-            seed=seed + 1,
-            samples=samples,
-            extra={
-                "triage_level_accuracy": None,
-                "department_accuracy": None,
-                "calibration": calibration_table(y_emergency, np.asarray(risks, dtype=float)),
-                "score_kind": "simulator risk score, not a calibrated probability",
-                "claim": "No speedup claimed. No quantum advantage assumed.",
-            },
-        )
-        print(
-            "Quantum ML test (proxy, not official, simulator only): "
-            f"recall={sections['quantum']['emergency_recall']}, "
-            f"missed={sections['quantum']['missed_emergencies']}, "
-            f"cost={sections['quantum']['cost']}"
-        )
+    sections["nurse_reference"] = _nurse_reference(
+        test, y_emergency, y_level, under=under, over=over, seed=seed + 5, samples=samples
+    )
 
     if classical is None:
         sections["pipeline"] = {
             "status": "Pending",
             "reason": "Full pipeline score needs the Classical ML artefact.",
         }
-        decisions: list[TriageDecision] = []
     else:
-        decisions = _pipeline_decisions(test, classical, quantum, use_quantum=quantum is not None)
+        decisions = _pipeline_decisions(test, classical)
         pipeline_levels = np.asarray(
             [
                 decision.triage_level if decision.triage_level is not None else -1
@@ -304,15 +320,12 @@ def main() -> None:
                 "triage_level_accuracy": accuracy(y_level[comparable], pipeline_levels[comparable])
                 if comparable.any()
                 else None,
-                "department_accuracy": accuracy(
-                    y_department,
-                    np.asarray(
-                        [decision.department or "" for decision in decisions],
-                        dtype=str,
-                    ),
+                "confusion_matrix": level_confusion(
+                    y_level[comparable], pipeline_levels[comparable]
                 ),
+                "per_level": per_level_report(y_level[comparable], pipeline_levels[comparable]),
                 **_abstention_block(decisions, y_emergency),
-                "includes_quantum": quantum is not None,
+                "note": "Safety-Rule Layer plus Classical ML. Abstention counts as urgent.",
             },
         )
         print(
@@ -331,15 +344,8 @@ def main() -> None:
         sections["runtime"] = {
             "status": "measured",
             "classical": time_calls(classical.predict_intake, intakes, 60),
-            "quantum": (
-                {"status": "Pending", "reason": "Quantum ML artefact is not available."}
-                if quantum is None
-                else time_calls(quantum.predict_intake, intakes, 20)
-            ),
             "pipeline": time_calls(
-                lambda intake: _pipeline_decisions(
-                    pd.DataFrame([intake]), classical, quantum, use_quantum=quantum is not None
-                ),
+                lambda intake: _pipeline_decisions(pd.DataFrame([intake]), classical),
                 intakes,
                 15,
             ),
@@ -359,45 +365,47 @@ def main() -> None:
             "pipeline": robustness_table(
                 test,
                 y_emergency,
-                lambda frame: _pipeline_urgent(
-                    _pipeline_decisions(frame, classical, quantum, use_quantum=False)
-                ),
+                lambda frame: _pipeline_urgent(_pipeline_decisions(frame, classical)),
                 [0.0, 0.25, 0.5],
                 under=under,
                 over=over,
                 seed=seed + 3,
             ),
-            "quantum": _quantum_robustness(test, y_emergency, quantum, under, over, seed),
             "note": (
                 "Vitals are blanked or replaced after fitting. Models are not retrained. "
-                "Pipeline rows are Safety-Rule Layer plus Classical ML, without Quantum ML. "
                 "Proxy, not official."
             ),
         }
-        if sections["classical"].get("status") == "measured":
-            urgent = _score_classical(classical, test)[1] <= 2
-            sections["fairness"] = {
-                "status": "measured",
-                "by_sex": subgroup_recall(
-                    y_emergency, urgent, test["sex"].map(_sex_group).to_numpy(), minimum_positives=5
-                ),
-                "by_age": subgroup_recall(
-                    y_emergency,
-                    urgent,
-                    test["age"].map(_age_band).to_numpy(),
-                    minimum_positives=5,
-                ),
-                "note": (
-                    "Descriptive slices of Classical ML on this test split. "
-                    "They do not establish fairness. "
-                    "Groups with fewer than 5 emergencies are Pending."
-                ),
-            }
-        else:
-            sections["fairness"] = {
-                "status": "Pending",
-                "reason": "Classical ML metrics are missing.",
-            }
+        urgent = _score_classical(classical, test)[1] <= 2
+        sections["fairness"] = {
+            "status": "measured",
+            "by_sex": subgroup_recall(
+                y_emergency, urgent, test["sex"].map(_sex_group).to_numpy(), minimum_positives=5
+            ),
+            "by_age": subgroup_recall(
+                y_emergency,
+                urgent,
+                test["age"].map(_age_band).to_numpy(),
+                minimum_positives=5,
+            ),
+            "note": (
+                "Descriptive slices of Classical ML on this test split. "
+                "They do not establish fairness. "
+                "Groups with fewer than 5 emergencies are Pending."
+            ),
+        }
+
+    sections["external_mimic_demo"] = external_mimic_demo(
+        classical, under=under, over=over, seed=seed + 7, samples=samples
+    )
+    external = sections["external_mimic_demo"]
+    if external.get("status") == "measured":
+        print(
+            "External MIMIC-IV-ED Demo (proxy, vs nurse ESI): "
+            f"classical recall={external['classical']['emergency_recall']}, "
+            f"pipeline recall={external['pipeline']['emergency_recall']}, "
+            f"n={external['n_labelled']}"
+        )
 
     arrivals = repo_root() / settings["data"]["arrivals_synthetic_path"]
     queue = settings["queue_sim"]
@@ -408,11 +416,13 @@ def main() -> None:
     payload = {
         "evaluation_kind": "proxy, not official",
         "data_source": data_source,
+        "dataset": manifest.get("dataset"),
+        "label_mapping": manifest.get("label_mapping"),
+        "split_counts": manifest.get("split_counts"),
         "disclaimer": (
             "Local proxy. Under-triage of a true emergency costs "
             f"{under:g} and over-triage costs {over:g}. "
             "Official evaluate.py was not used for these tables. "
-            "Quantum ML is a simulator experiment. No speedup or advantage is claimed. "
             "Not clinically validated."
         ),
         "cost_definition": {
@@ -427,37 +437,6 @@ def main() -> None:
     json_path, md_path = write_reports(payload, settings)
     print(f"Wrote {json_path.relative_to(repo_root())}")
     print(f"Wrote {md_path.relative_to(repo_root())}")
-
-
-def _quantum_robustness(
-    test: pd.DataFrame,
-    y_emergency: np.ndarray,
-    quantum: Any,
-    under: float,
-    over: float,
-    seed: int,
-) -> Any:
-    if quantum is None:
-        return {"status": "Pending", "reason": "Quantum ML artefact is not available."}
-    sample = test.iloc[:40].copy()
-    labels = y_emergency[: len(sample)]
-    rows = robustness_table(
-        sample,
-        labels,
-        lambda frame: np.asarray(
-            [quantum.predict_intake(intake).level <= 2 for intake in iter_intakes(frame)]
-        ),
-        [0.0, 0.5],
-        under=under,
-        over=over,
-        seed=seed + 4,
-    )
-    return {
-        "status": "measured",
-        "n": int(len(sample)),
-        "rows": rows,
-        "note": "Subset of the test split.",
-    }
 
 
 if __name__ == "__main__":

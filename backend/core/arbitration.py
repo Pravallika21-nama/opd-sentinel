@@ -36,22 +36,16 @@ def keyword_department(complaint: str | None) -> str | None:
     return None
 
 
-def _is_urgent(level: int) -> bool:
-    return level <= 2
-
-
 def arbitrate(
     intake: dict[str, Any],
     classical: ModelView | None,
-    quantum: ModelView | None,
     *,
-    quantum_note: str | None = None,
     illustrative: bool = False,
 ) -> TriageDecision:
-    """Combine validation, the Safety-Rule Layer, and optional model outputs.
+    """Combine validation, the Safety-Rule Layer, and the Classical ML view.
 
-    `classical` and `quantum` are already-computed views. This function does
-    not load artefacts and does not read hidden labels.
+    `classical` is already computed. This function does not load artefacts
+    and does not read hidden labels.
     """
     validation = validate_intake(intake)
     red_flags = find_red_flags(
@@ -80,36 +74,15 @@ def arbitrate(
             f"Minimum level {rule.min_level} ({reviewed})."
         )
 
-    model_levels: list[int] = []
+    model_level: int | None = None
     if classical is not None:
-        model_levels.append(classical.level)
+        model_level = classical.level
         explanation.append(
             f"Classical ML level {classical.level}, "
             f"emergency probability {classical.p_emergency:.3f}."
         )
     else:
         explanation.append("Classical ML artefact is not available.")
-    if quantum is not None:
-        model_levels.append(quantum.level)
-        explanation.append(
-            "Quantum ML (experimental, simulator only) "
-            f"level {quantum.level}, risk score {quantum.p_emergency:.3f}. "
-            "No speedup or advantage is claimed."
-        )
-    elif quantum_note:
-        explanation.append(quantum_note)
-
-    models_disagree = False
-    model_level: int | None = min(model_levels) if model_levels else None
-    if (
-        classical is not None
-        and quantum is not None
-        and _is_urgent(classical.level) != _is_urgent(quantum.level)
-    ):
-        models_disagree = True
-        explanation.append(
-            "Models disagree on emergency. Escalated to the more urgent view for Nurse Review."
-        )
 
     settings = load_settings()
     max_uncertainty = float(settings["abstention"]["max_uncertainty"])
@@ -148,9 +121,7 @@ def arbitrate(
         abstain_reasons=_unique(abstain_reasons),
         uncertainty=uncertainty,
         classical=classical,
-        quantum=quantum,
-        quantum_note=quantum_note,
-        models_disagree=models_disagree,
+        model_status="ok" if classical is not None else "unavailable",
         validation_issues=issues,
         explanation=explanation,
         illustrative=illustrative,

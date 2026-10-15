@@ -1,4 +1,4 @@
-"""Feature preprocessing shared by Classical ML and Quantum ML.
+"""Feature preprocessing for Classical ML.
 
 Imputation is for the model matrix only. The raw intake is never rewritten.
 Hidden labels are not read here.

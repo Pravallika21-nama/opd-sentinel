@@ -65,9 +65,7 @@ class TriageDecision(BaseModel):
     abstain_reasons: list[str] = Field(default_factory=list)
     uncertainty: float | None = Field(default=None, ge=0.0, le=1.0)
     classical: ModelView | None = None
-    quantum: ModelView | None = None
-    quantum_note: str | None = None
-    models_disagree: bool = False
+    model_status: Literal["ok", "unavailable", "error"] = "unavailable"
     validation_issues: list[ValidationIssue] = Field(default_factory=list)
     explanation: list[str] = Field(default_factory=list)
     illustrative: bool = False

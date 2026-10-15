@@ -37,19 +37,10 @@ def _show(decision_dump: dict, latency_ms: float) -> None:
         print("   No plausibility issues on the entered fields.")
     print("3. Run models")
     classical = decision_dump["classical"]
-    quantum = decision_dump["quantum"]
     if classical:
         print(f"   Classical ML level {classical['level']}, p={classical['p_emergency']:.3f}")
     else:
-        print("   Classical ML: Pending (artefact not loaded)")
-    if quantum:
-        print(
-            "   Quantum ML (experimental, simulator only) "
-            f"level {quantum['level']}, risk={quantum['p_emergency']:.3f}"
-        )
-        print("   No speedup or advantage is claimed.")
-    else:
-        print("   Quantum ML unavailable")
+        print("   Classical ML: Pending (artefact not loaded). No level is invented.")
     print("4. Apply Safety-Rule Layer")
     if decision_dump["fired_rules"]:
         for rule in decision_dump["fired_rules"]:
@@ -71,11 +62,7 @@ def _show(decision_dump: dict, latency_ms: float) -> None:
         print("   Escalated: level is 1 or 2, so the case is pinned for Nurse Review.")
     else:
         print("   No extra escalation beyond the displayed level.")
-    print("7. Compare models")
-    if decision_dump["models_disagree"]:
-        print("   Models disagree. Nurse Review should see the more urgent view.")
-    else:
-        print("   Models do not disagree on this example, or Quantum ML did not return a level.")
+    print("7. Evaluation")
     report = repo_root() / load_settings()["reports"]["json"]
     if report.is_file():
         payload = json.loads(report.read_text(encoding="utf-8"))

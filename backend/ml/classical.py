@@ -65,6 +65,15 @@ class ClassicalBundle:
         return probabilities.astype(float), levels.astype(int), departments
 
 
+def has_department_labels(frame: pd.DataFrame) -> bool:
+    """True when the frame carries at least two non-empty department labels."""
+    if "department" not in frame.columns:
+        return False
+    labels = frame["department"].dropna().astype(str).str.strip()
+    labels = labels[labels != ""]
+    return len(labels) == len(frame) and labels.nunique() >= 2
+
+
 def fit_classical(
     train: pd.DataFrame,
     val: pd.DataFrame,
@@ -87,18 +96,23 @@ def fit_classical(
     y_em_val = val["emergency"].to_numpy().astype(int)
     y_level_train = train["triage_level"].to_numpy().astype(int)
     y_level_val = val["triage_level"].to_numpy().astype(int)
-    y_dept_train = train["department"].astype(str).to_numpy()
-    y_dept_val = val["department"].astype(str).to_numpy()
-
     emergency, emergency_name, threshold, emergency_report = _select_emergency(
         x_train, y_em_train, x_val, y_em_val, seed, class_weight, candidates
     )
     triage, triage_name, triage_report = _select_triage(
         x_train, y_level_train, x_val, y_level_val, seed, candidates
     )
-    department, department_name, department_report = _select_department(
-        x_train, y_dept_train, x_val, y_dept_val, seed, candidates
-    )
+    department: Any = None
+    department_name = ""
+    department_report: list[dict[str, Any]] = []
+    department_note = "Not trained. The training data has no department label."
+    if has_department_labels(train):
+        y_dept_train = train["department"].astype(str).to_numpy()
+        y_dept_val = val["department"].fillna("").astype(str).to_numpy()
+        department, department_name, department_report = _select_department(
+            x_train, y_dept_train, x_val, y_dept_val, seed, candidates
+        )
+        department_note = "Trained on the department label."
 
     # Validation report after the emergency threshold is allowed to cap the level.
     val_probabilities = emergency.predict_proba(x_val)[:, 1]
@@ -121,7 +135,8 @@ def fit_classical(
         "emergency_model": emergency_name,
         "emergency_threshold": threshold,
         "triage_model": triage_name,
-        "department_model": department_name,
+        "department_model": department_name or None,
+        "department_note": department_note,
         "validation_emergency_head": _jsonable(emergency_head),
         "validation_combined_level_cost": _jsonable(combined),
         "emergency_candidates": emergency_report,

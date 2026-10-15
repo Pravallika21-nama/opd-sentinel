@@ -25,6 +25,21 @@ class Settings(BaseSettings):
     database_path: str = "data/sentinel.db"
     seed_demo: bool = False
     mimic_ed_dir: str = ""
+    # Fictional demo accounts are created on first start when no user exists.
+    # Empty means a random password is generated and written to demo_credentials_path.
+    seed_users: bool = True
+    demo_password: str = ""
+    demo_credentials_path: str = "data/demo_credentials.txt"
+    session_hours: int = 12
+    # One-click sign-in buttons for the fictional demo accounts. Only requests from
+    # this computer (loopback) are accepted. Turn off for any shared deployment.
+    demo_quick_login: bool = True
+    # Lets patients create their own portal account from the sign-in page.
+    patient_signup: bool = True
+    # A patient can have at most this many check-ins waiting for a nurse.
+    patient_open_checkins: int = 2
+    # "Today" on the station cards uses this offset from UTC. 330 is India Standard Time.
+    clinic_utc_offset_minutes: int = 330
     cors_origins: list[str] = Field(
         default_factory=lambda: [
             "http://localhost:5173",

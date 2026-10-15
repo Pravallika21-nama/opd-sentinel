@@ -19,14 +19,13 @@ dependencies = [
 
 [project.optional-dependencies]
 # Installed by `make setup`. Presence of these libraries is not a measured result.
-# Quantum ML uses the PennyLane default.qubit simulator only. No speedup or
-# accuracy advantage is claimed.
+# openpyxl reads the published KTAS supplementary workbook.
 ml = [
     "numpy==2.5.4",
     "pandas==3.0.6",
     "scikit-learn==1.9.1",
     "joblib==1.6.0",
-    "pennylane==0.45.1",
+    "openpyxl==3.1.5",
 ]
 dev = [
     "pytest==9.1.1",

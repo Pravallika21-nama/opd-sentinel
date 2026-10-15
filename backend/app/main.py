@@ -17,8 +17,13 @@ from app.settings import get_settings
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> Any:
-    """Create the audit database and optionally seed illustrative cases."""
+    """Create the database, the fictional demo accounts, and optionally illustrative cases."""
     init_db()
+    from app.auth import seed_demo_patient, seed_demo_users
+
+    location = seed_demo_users() or seed_demo_patient()
+    if location:
+        print(f"OPD Sentinel: fictional demo accounts created. Password source: {location}")
     from app.services.pipeline import warm_models
 
     warm_models()
@@ -35,7 +40,10 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="OPD Sentinel",
         version=__version__,
-        summary="Decision-support triage for an overloaded outpatient department.",
+        summary=(
+            "Decision-support triage, consultation, and prescription recording "
+            "for an overloaded outpatient department."
+        ),
         lifespan=lifespan,
     )
     app.add_middleware(
@@ -55,7 +63,7 @@ def create_app() -> FastAPI:
         return JSONResponse(
             status_code=422,
             content={
-                "message": "Intake could not be read. Check the field types.",
+                "message": "The request could not be read. Check the highlighted fields.",
                 "errors": errors,
             },
         )

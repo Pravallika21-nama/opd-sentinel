@@ -1,5 +1,4 @@
 """Model training and inference.
 
-Classical ML is the live path. Quantum ML is an experiment on a simulator
-and is not assumed to be faster or more accurate.
+Classical ML is the only model path. It is decision support for Nurse Review.
 """

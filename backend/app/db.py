@@ -35,6 +35,9 @@ class CaseRecord(Base):
     illustrative: Mapped[int] = mapped_column(Integer, default=0)
     complaint_preview: Mapped[str] = mapped_column(String(240), default="")
     opd_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    patient_ref: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    patient_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    registered_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class PredictionRecord(Base):
@@ -72,6 +75,116 @@ class AuditRecord(Base):
     created_at: Mapped[str] = mapped_column(String(40))
     event: Mapped[str] = mapped_column(String(40))
     payload_json: Mapped[str] = mapped_column(Text)
+    actor: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    actor_role: Mapped[str | None] = mapped_column(String(16), nullable=True)
+
+
+class UserRecord(Base):
+    """A staff account. The password is stored as a salted PBKDF2 hash only."""
+
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(120))
+    role: Mapped[str] = mapped_column(String(16))
+    password_hash: Mapped[str] = mapped_column(String(256))
+    active: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[str] = mapped_column(String(40))
+
+
+class SessionRecord(Base):
+    """A sign-in session. Only the SHA-256 of the bearer token is stored."""
+
+    __tablename__ = "sessions"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[str] = mapped_column(String(40))
+    expires_at: Mapped[str] = mapped_column(String(40))
+    revoked: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class EncounterStatusRecord(Base):
+    """Encounter status history. The latest row is the current status."""
+
+    __tablename__ = "encounter_status"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    case_id: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[str] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(32))
+    actor: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    actor_role: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    note: Mapped[str] = mapped_column(Text, default="")
+
+
+class ConsultationRecord(Base):
+    """One saved version of the doctor's consultation note. New saves add rows."""
+
+    __tablename__ = "consultations"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    case_id: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[str] = mapped_column(String(40))
+    doctor_id: Mapped[str] = mapped_column(String(64))
+    doctor_name: Mapped[str] = mapped_column(String(120))
+    examination_findings: Mapped[str] = mapped_column(Text, default="")
+    clinical_assessment: Mapped[str] = mapped_column(Text, default="")
+    diagnosis: Mapped[str] = mapped_column(Text, default="")
+    treatment_plan: Mapped[str] = mapped_column(Text, default="")
+    follow_up: Mapped[str] = mapped_column(Text, default="")
+    referral: Mapped[str] = mapped_column(Text, default="")
+
+
+class PrescriptionRecord(Base):
+    """A doctor-entered prescription line. Status changes are audited."""
+
+    __tablename__ = "prescriptions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    case_id: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[str] = mapped_column(String(40))
+    prescriber_id: Mapped[str] = mapped_column(String(64))
+    prescriber_name: Mapped[str] = mapped_column(String(120))
+    medication: Mapped[str] = mapped_column(String(200))
+    dose: Mapped[str] = mapped_column(String(40))
+    dose_unit: Mapped[str] = mapped_column(String(20))
+    route: Mapped[str] = mapped_column(String(20))
+    frequency: Mapped[str] = mapped_column(String(80))
+    duration: Mapped[str] = mapped_column(String(80))
+    instructions: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    status_changed_at: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    status_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class PatientIntakeRecord(Base):
+    """A patient's own check-in. Self-reported until a nurse registers it."""
+
+    __tablename__ = "patient_intakes"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    created_at: Mapped[str] = mapped_column(String(40))
+    patient_user_id: Mapped[str] = mapped_column(String(64), index=True)
+    patient_ref: Mapped[str] = mapped_column(String(64), index=True)
+    full_name: Mapped[str] = mapped_column(String(120))
+    age: Mapped[float | None] = mapped_column(nullable=True)
+    sex: Mapped[str] = mapped_column(String(40), default="")
+    preferred_language: Mapped[str] = mapped_column(String(16), default="en")
+    symptoms: Mapped[str] = mapped_column(Text)
+    symptom_duration: Mapped[str] = mapped_column(String(80), default="")
+    severity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    known_conditions: Mapped[str] = mapped_column(Text, default="")
+    medications: Mapped[str] = mapped_column(Text, default="")
+    allergies: Mapped[str] = mapped_column(Text, default="")
+    self_vitals_json: Mapped[str] = mapped_column(Text, default="{}")
+    red_flags_json: Mapped[str] = mapped_column(Text, default="[]")
+    status: Mapped[str] = mapped_column(String(16), default="submitted")
+    status_note: Mapped[str] = mapped_column(Text, default="")
+    reviewed_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reviewed_at: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    case_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
 
 def database_file() -> Path:
@@ -121,17 +234,31 @@ def init_db() -> None:
     backfill_opd_numbers()
 
 
+_ADDED_COLUMNS: dict[str, tuple[tuple[str, str], ...]] = {
+    "cases": (
+        ("opd_number", "VARCHAR(32)"),
+        ("patient_ref", "VARCHAR(64)"),
+        ("patient_name", "VARCHAR(120)"),
+        ("registered_by", "VARCHAR(64)"),
+    ),
+    "audit_log": (("actor", "VARCHAR(64)"), ("actor_role", "VARCHAR(16)")),
+}
+
+
 def _ensure_opd_storage(engine: Engine) -> None:
-    """Add the OPD number column on databases created before it existed."""
+    """Add columns that older databases lack. Only ADD COLUMN; nothing is dropped."""
     with engine.begin() as conn:
         tables = {
             row[0]
             for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
         }
-        if "cases" in tables:
-            columns = {row[1] for row in conn.execute(text("PRAGMA table_info(cases)"))}
-            if "opd_number" not in columns:
-                conn.execute(text("ALTER TABLE cases ADD COLUMN opd_number VARCHAR(32)"))
+        for table, added in _ADDED_COLUMNS.items():
+            if table not in tables:
+                continue
+            columns = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))}
+            for name, kind in added:
+                if name not in columns:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {kind}"))
         conn.execute(
             text(
                 "CREATE TABLE IF NOT EXISTS opd_counters "

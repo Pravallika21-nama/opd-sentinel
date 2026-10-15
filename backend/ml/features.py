@@ -1,8 +1,4 @@
-"""Shared feature matrix for Classical ML.
-
-Quantum ML uses the imputed numeric columns selected during its own training.
-Hidden labels are not columns of this matrix.
-"""
+"""Feature matrix for Classical ML. Hidden labels are not columns of this matrix."""
 
 from __future__ import annotations
 
@@ -88,14 +84,6 @@ class FeatureBuilder:
         frame = pd.DataFrame([intake])
         matrix, _names = self.transform(frame)
         return matrix
-
-    def continuous_matrix(self, frame: pd.DataFrame) -> np.ndarray:
-        """Imputed age and vitals, unscaled. Quantum ML selects from these columns."""
-        rows = []
-        for intake in iter_intakes(frame):
-            prepared = prepare_numeric(validate_intake(intake), self.medians)
-            rows.append([prepared[name] for name in NUMERIC_FIELDS])
-        return np.asarray(rows, dtype=np.float64)
 
     def _numeric_dict(self, intake: dict[str, Any], validation: Any) -> dict[str, float]:
         features = prepare_numeric(validation, self.medians)

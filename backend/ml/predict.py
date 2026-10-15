@@ -1,7 +1,4 @@
-"""Load saved artefacts and score one case.
-
-Classical ML is the live path. Quantum ML is optional and experimental.
-"""
+"""Load the saved Classical ML artefact and score one case."""
 
 from __future__ import annotations
 
@@ -27,33 +24,23 @@ def classical_available() -> bool:
     return artifact_path("classical").is_file()
 
 
-def quantum_available() -> bool:
-    """True when `make train` has written the Quantum ML artefact."""
-    return artifact_path("quantum").is_file()
-
-
 def load_classical() -> Any | None:
     """Load the Classical ML bundle, or None when it has not been trained."""
     return _load("classical")
 
 
-def load_quantum() -> Any | None:
-    """Load the Quantum ML bundle, or None when it has not been trained."""
-    return _load("quantum")
+def classical_metadata() -> dict[str, Any] | None:
+    """Training metadata saved next to the artefact, or None."""
+    bundle = load_classical()
+    if bundle is None:
+        return None
+    metadata = getattr(bundle, "metadata", None)
+    return dict(metadata) if isinstance(metadata, dict) else None
 
 
 def classical_view(intake: dict[str, Any]) -> ModelView | None:
     """Score one case with Classical ML."""
     bundle = load_classical()
-    if bundle is None:
-        return None
-    view: ModelView = bundle.predict_intake(intake)
-    return view
-
-
-def quantum_view(intake: dict[str, Any]) -> ModelView | None:
-    """Score one case with Quantum ML. Caller handles timeout and errors."""
-    bundle = load_quantum()
     if bundle is None:
         return None
     view: ModelView = bundle.predict_intake(intake)

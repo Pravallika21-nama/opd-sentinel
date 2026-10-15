@@ -1,52 +1,48 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchHealth } from "../api/health";
-
-const statusRows = [
-  ["Classical ML", "Live path. A score exists only after make train."],
-  ["Quantum ML", "Experimental, simulator only. No advantage is claimed."],
-  ["Safety-Rule Layer", "Loaded from config. Thresholds are not clinically reviewed."],
-  ["Evaluation", "Open Evaluation. It reads reports/results.json. Missing cells stay Pending."],
-] as const;
+import { useLocale } from "../lib/i18n";
 
 export function HealthPage() {
+  const { t } = useLocale();
   const health = useQuery({
     queryKey: ["health"],
     queryFn: fetchHealth,
   });
+  const statusRows = [
+    ["Classical ML", t.buildClassical],
+    ["Safety-Rule Layer", t.buildRules],
+    [t.evaluationName, t.buildEvaluation],
+  ] as const;
 
   return (
     <section className="flex flex-col gap-8">
       <header className="flex flex-col gap-3">
-        <p className="text-sm font-semibold uppercase tracking-wide text-teal">
-          Outpatient decision support
-        </p>
+        <p className="text-sm font-semibold uppercase tracking-wide text-teal">{t.healthKicker}</p>
         <h1 className="text-4xl font-semibold text-ink">OPD Sentinel</h1>
-        <p className="max-w-2xl text-lg leading-relaxed text-ink">
-          A nurse confirms every case. This tool does not diagnose and does not replace a doctor.
-        </p>
+        <p className="max-w-2xl text-lg leading-relaxed text-ink">{t.healthIntro}</p>
       </header>
 
       <section aria-labelledby="api-health-heading" className="rounded-lg border border-line bg-card p-6">
         <h2 id="api-health-heading" className="text-xl font-semibold text-ink">
-          API health
+          {t.apiHealth}
         </h2>
-        <p className="mt-2 text-ink">Live check of the API process. This is not a model score.</p>
+        <p className="mt-2 text-ink">{t.apiHealthSub}</p>
 
-        {health.isPending ? <p role="status" className="mt-4 text-lg">Checking the API…</p> : null}
+        {health.isPending ? <p role="status" className="mt-4 text-lg">{t.checkingApi}</p> : null}
 
         {health.isError ? (
           <p role="alert" className="mt-4 text-lg font-semibold text-alert">
-            Status: unreachable. The OPD Sentinel API did not respond.
+            {t.apiUnreachable}
           </p>
         ) : null}
 
         {health.data ? (
           <dl className="mt-4 grid grid-cols-[8rem_1fr] gap-y-2 text-lg">
-            <dt className="font-semibold">Status</dt>
+            <dt className="font-semibold">{t.healthStatus}</dt>
             <dd>{health.data.status}</dd>
-            <dt className="font-semibold">Service</dt>
+            <dt className="font-semibold">{t.healthService}</dt>
             <dd>{health.data.service}</dd>
-            <dt className="font-semibold">Version</dt>
+            <dt className="font-semibold">{t.healthVersion}</dt>
             <dd>{health.data.version}</dd>
           </dl>
         ) : null}
@@ -54,7 +50,7 @@ export function HealthPage() {
 
       <section aria-labelledby="build-status-heading" className="rounded-lg border border-line bg-card p-6">
         <h2 id="build-status-heading" className="text-xl font-semibold text-ink">
-          Build status
+          {t.buildStatus}
         </h2>
         <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[12rem_1fr]">
           {statusRows.map(([name, status]) => (

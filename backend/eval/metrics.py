@@ -70,6 +70,44 @@ def accuracy(y_true: np.ndarray, y_pred: np.ndarray) -> float | None:
     return round(float((np.asarray(y_true) == np.asarray(y_pred)).mean()), 4)
 
 
+def level_confusion(
+    y_true: np.ndarray, y_pred: np.ndarray, labels: tuple[int, ...] = (1, 2, 3, 4, 5)
+) -> dict[str, object]:
+    """Counts with true level as rows and predicted level as columns."""
+    truth = np.asarray(y_true).astype(int)
+    pred = np.asarray(y_pred).astype(int)
+    matrix = [[int(((truth == row) & (pred == col)).sum()) for col in labels] for row in labels]
+    return {
+        "labels": list(labels),
+        "rows": "true level",
+        "columns": "predicted level",
+        "matrix": matrix,
+    }
+
+
+def per_level_report(
+    y_true: np.ndarray, y_pred: np.ndarray, labels: tuple[int, ...] = (1, 2, 3, 4, 5)
+) -> list[dict[str, float | int | None]]:
+    """Precision and recall for each level. Empty levels stay None."""
+    truth = np.asarray(y_true).astype(int)
+    pred = np.asarray(y_pred).astype(int)
+    rows: list[dict[str, float | int | None]] = []
+    for level in labels:
+        support = int((truth == level).sum())
+        predicted = int((pred == level).sum())
+        hit = int(((truth == level) & (pred == level)).sum())
+        rows.append(
+            {
+                "level": level,
+                "support": support,
+                "predicted": predicted,
+                "precision": None if predicted == 0 else round(hit / predicted, 4),
+                "recall": None if support == 0 else round(hit / support, 4),
+            }
+        )
+    return rows
+
+
 def calibration_table(
     y_emergency: np.ndarray, scores: np.ndarray, bins: int = 5
 ) -> list[dict[str, float | int]]:

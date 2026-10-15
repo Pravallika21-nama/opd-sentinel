@@ -52,9 +52,10 @@ def _markdown(payload: dict[str, Any]) -> str:
         "",
     ]
     sections = payload.get("sections", {})
+    lines.insert(5, f"Dataset: {_cell(payload.get('dataset'))}.")
     for name in (
         "classical",
-        "quantum",
+        "nurse_reference",
         "pipeline",
         "runtime",
         "robustness",
@@ -122,8 +123,8 @@ def _write_recall_figure(path: Path, payload: dict[str, Any]) -> None:
     bars: list[tuple[str, float]] = []
     for key, label in (
         ("classical", "Classical ML"),
-        ("quantum", "Quantum ML"),
         ("pipeline", "Full pipeline"),
+        ("nurse_reference", "Triage nurse"),
     ):
         section = sections.get(key, {})
         recall = section.get("emergency_recall") if isinstance(section, dict) else None

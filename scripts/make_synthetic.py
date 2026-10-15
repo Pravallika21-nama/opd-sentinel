@@ -24,7 +24,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 from core.config_loader import load_settings  # noqa: E402
 from core.constants import LABEL_FIELDS  # noqa: E402
 from core.paths import repo_root  # noqa: E402
-from ml.dataset import load_table, write_splits  # noqa: E402
+from ml.dataset import load_table, resolve_intake_source, write_splits  # noqa: E402
 
 LANGS = ["en", "hi", "te", "hi_script", "te_script"]
 LANG_P = [0.42, 0.28, 0.14, 0.08, 0.08]
@@ -366,18 +366,31 @@ def main() -> None:
     build_arrivals(int(settings["queue_sim"]["arrivals"]), int(synthetic_cfg["seed"])).to_csv(
         arrivals_path, index=False
     )
-    official = root / settings["data"]["official_path"]
-    if official.is_file():
-        source = load_table(official)
-        kind = "official"
-        print(f"Official file found at {official}. Splits use it.")
+    path, kind = resolve_intake_source()
+    extra: dict[str, Any] = {}
+    if kind == "official":
+        source = load_table(path)
+        print(f"Official file found at {path}. Splits use it.")
         print("config/settings.yaml column_map must name the real headers. They are not guessed.")
+        note = "Splits were built from the official file."
+    elif kind == "public_deidentified_ktas":
+        source = load_table(path, use_column_map=False)
+        print(f"Public KTAS dataset found at {path}. Splits use it.")
+        print("Emergency-department records, not OPD records. See DATASET.md.")
+        note = (
+            "Real, de-identified emergency-department records. Labels are expert KTAS levels. "
+            "Not OPD data and not clinically equivalent to this application's levels."
+        )
+        prepared = path.with_suffix(".json")
+        if prepared.is_file():
+            extra = json.loads(prepared.read_text(encoding="utf-8"))
     else:
         source = frame
-        kind = "synthetic"
-        print("Official intake file is absent (data/raw/intake.csv).")
+        print("No official file and no prepared KTAS file.")
         print("Splits use the labelled synthetic file. This is not a hospital extract.")
-        print("When the organiser file arrives, put it at data/raw/intake.csv and set column_map.")
+        print("Run make ktas to prepare the public KTAS dataset.")
+        note = "Synthetic rows are labelled record_source=synthetic."
+        extra = {"dataset": "Synthetic intake generator (scripts/make_synthetic.py)"}
     counts = write_splits(source, processed, int(settings["random_seed"]), settings["splits"])
     emergencies = int(source["emergency"].sum())
     manifest = {
@@ -388,9 +401,8 @@ def main() -> None:
         "split_counts": counts,
         "seed": int(settings["random_seed"]),
         "label_fields": list(LABEL_FIELDS),
-        "note": "Synthetic rows are labelled record_source=synthetic."
-        if kind == "synthetic"
-        else "Splits were built from the official file.",
+        "note": note,
+        **extra,
     }
     (processed / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print(f"source: {kind}")

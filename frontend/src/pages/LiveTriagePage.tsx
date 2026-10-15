@@ -1,9 +1,9 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { apiGet, apiPost, type FieldIssue, type TriageResult } from "../api/client";
+import { ApiError, apiGet, apiPost, type FieldIssue, type TriageResult } from "../api/client";
 import { NurseActions } from "../components/NurseActions";
-import { ResultCard } from "../components/ResultCard";
-import { useLocale } from "../lib/i18n";
+import { ResultCard, fieldLabel } from "../components/ResultCard";
+import { fieldStatusName, useLocale, type Copy } from "../lib/i18n";
 
 type Ranges = {
   fields: Record<string, { min: number; max: number; unit: string }>;
@@ -16,6 +16,11 @@ type DemoFile = {
 };
 
 const empty = {
+  patient_ref: "",
+  patient_name: "",
+  arrival_time: "",
+  nurse_notes: "",
+  uncertain_information: "",
   age: "",
   sex: "",
   systolic_bp: "",
@@ -37,35 +42,27 @@ const vitalNames = [
 ] as const;
 
 const sexOptions = [
-  ["", "Not recorded"],
-  ["female", "Female"],
-  ["male", "Male"],
-  ["other", "Other"],
+  ["", "sexNotRecorded"],
+  ["female", "sexFemale"],
+  ["male", "sexMale"],
+  ["other", "sexOther"],
 ] as const;
 
-function hint(name: string, raw: string, ranges: Ranges | undefined): string {
+function hint(name: string, raw: string, ranges: Ranges | undefined, t: Copy): string {
   if (!ranges || raw.trim() === "") return "";
   const value = Number(raw);
-  if (Number.isNaN(value)) return "Not a number. It will be kept.";
+  if (Number.isNaN(value)) return t.hintNotNumber;
   const spec = ranges.fields[name];
   if (!spec) return "";
   if (name === "temperature_c" && value >= ranges.temperature_unit.fahrenheit_min && value > spec.max) {
-    return "Looks like Fahrenheit. It will be flagged, not converted.";
+    return t.hintFahrenheit;
   }
-  if (value < spec.min || value > spec.max) return `Outside placeholder range ${spec.min}–${spec.max}.`;
+  if (value < spec.min || value > spec.max) return t.hintOutside(spec.min, spec.max);
   return "";
 }
 
 function statusOf(issues: FieldIssue[], field: string): string {
   return issues.find((issue) => issue.field === field)?.status ?? "";
-}
-
-function statusLabel(status: string): string {
-  if (status === "ok") return "Valid";
-  if (status === "missing") return "Missing";
-  if (status === "implausible") return "Implausible";
-  if (status === "conflicting") return "Conflicting";
-  return "";
 }
 
 export function LiveTriagePage() {
@@ -90,7 +87,13 @@ export function LiveTriagePage() {
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
+    const arrival = form.arrival_time ? new Date(form.arrival_time) : null;
     submit.mutate({
+      patient_ref: form.patient_ref,
+      patient_name: form.patient_name,
+      arrival_time: arrival && !Number.isNaN(arrival.getTime()) ? arrival.toISOString() : null,
+      nurse_notes: form.nurse_notes,
+      uncertain_information: form.uncertain_information,
       age: numberOrNull(form.age),
       sex: form.sex || null,
       systolic_bp: numberOrNull(form.systolic_bp),
@@ -106,9 +109,10 @@ export function LiveTriagePage() {
   }
 
   function fill(intake: Record<string, unknown>) {
-    setBanner(demos.data?.banner ?? "Example, not a real clinical outcome");
+    setBanner(demos.data?.banner ?? t.exampleOutcome);
     setResult(null);
     setForm({
+      ...empty,
       age: intake.age == null ? "" : String(intake.age),
       sex: intake.sex == null ? "" : String(intake.sex),
       systolic_bp: intake.systolic_bp == null ? "" : String(intake.systolic_bp),
@@ -123,27 +127,29 @@ export function LiveTriagePage() {
   }
 
   const issues = result?.validation_issues ?? [];
+  const knownSexChoices = sexOptions.map(([value, key]) => [value, t[key]] as const);
   const sexChoices = sexOptions.some(([value]) => value === form.sex)
-    ? sexOptions
-    : [...sexOptions, [form.sex, form.sex] as const];
+    ? knownSexChoices
+    : [...knownSexChoices, [form.sex, form.sex] as const];
 
   function clearAll() {
     setForm(empty);
     setBanner(null);
     setResult(null);
+    submit.reset();
   }
 
   return (
     <div className="triage-layout">
       <form className="panel" onSubmit={onSubmit}>
-        <h2 className="section-title">Patient intake</h2>
+        <h2 className="section-title">{t.registrationTitle}</h2>
         <p className="section-sub">
-          Leave a field blank if it was not measured. Entries are stored exactly as typed.
+          {t.registrationSub} {t.patientIntakeSub}
         </p>
 
         {demoMode && (demos.data?.cases ?? []).length > 0 ? (
           <div className="mt-4 rounded-xl bg-sky-50 px-4 py-3">
-            <p className="text-sm font-semibold text-sky-900">Try an example (not a real patient)</p>
+            <p className="text-sm font-semibold text-sky-900">{t.tryExample}</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {(demos.data?.cases ?? []).map((item) => (
                 <button key={item.id} type="button" className="chip" onClick={() => fill(item.intake)}>
@@ -156,7 +162,46 @@ export function LiveTriagePage() {
         {banner ? <p className="notice mt-3">{banner}</p> : null}
 
         <fieldset className="form-section">
-          <legend className="form-section-title">Patient</legend>
+          <legend className="form-section-title">{t.patient}</legend>
+          <div className="field-grid">
+            <label className="field-label">
+              {t.patientRef}
+              <input
+                className="field"
+                maxLength={64}
+                autoComplete="off"
+                value={form.patient_ref}
+                aria-describedby="patient-ref-hint"
+                onChange={(event) => setForm({ ...form, patient_ref: event.target.value })}
+              />
+              <span id="patient-ref-hint" className="text-xs font-normal text-slate-500">
+                {t.patientRefHint}
+              </span>
+            </label>
+            <label className="field-label">
+              {t.patientName}
+              <input
+                className="field"
+                maxLength={120}
+                autoComplete="off"
+                value={form.patient_name}
+                onChange={(event) => setForm({ ...form, patient_name: event.target.value })}
+              />
+            </label>
+            <label className="field-label">
+              {t.arrivalTime}
+              <input
+                className="field"
+                type="datetime-local"
+                value={form.arrival_time}
+                aria-describedby="arrival-hint"
+                onChange={(event) => setForm({ ...form, arrival_time: event.target.value })}
+              />
+              <span id="arrival-hint" className="text-xs font-normal text-slate-500">
+                {t.arrivalHint}
+              </span>
+            </label>
+          </div>
           <div className="field-grid">
             <label className="field-label">
               {t.sex}
@@ -173,17 +218,17 @@ export function LiveTriagePage() {
               <input className="field" inputMode="decimal" value={form.age} onChange={(event) => setForm({ ...form, age: event.target.value })} />
             </label>
           </div>
-          <p className="mt-2 text-xs text-slate-500">The OPD number is assigned when the case is stored.</p>
+          <p className="mt-2 text-xs text-slate-500">{t.opdAssigned}</p>
         </fieldset>
 
         <fieldset className="form-section">
-          <legend className="form-section-title">Vital signs</legend>
+          <legend className="form-section-title">{t.vitalSigns}</legend>
           <div className="field-grid is-vitals">
             {vitalNames.map(([name, label, unit]) => {
               const reported = statusOf(issues, name);
               const status = reported || (result && form[name].trim() ? "ok" : "");
-              const typedHint = hint(name, form[name], ranges.data);
-              const message = status ? statusLabel(status) : typedHint;
+              const typedHint = hint(name, form[name], ranges.data, t);
+              const message = status ? fieldStatusName(t, status) : typedHint;
               const tone = status === "implausible" || status === "conflicting"
                 ? "is-alert"
                 : status === "ok" ? "" : "is-hint";
@@ -216,20 +261,18 @@ export function LiveTriagePage() {
         </fieldset>
 
         <fieldset className="form-section">
-          <legend className="form-section-title">Complaint and history</legend>
+          <legend className="form-section-title">{t.complaintHistory}</legend>
           <label className="field-label mt-3" htmlFor="complaint">
             {t.complaint}
             <textarea
               id="complaint"
               className="field min-h-20"
               value={form.complaint}
-              placeholder="As the patient speaks, in any language"
+              placeholder={t.complaintPlaceholder}
               onChange={(event) => setForm({ ...form, complaint: event.target.value })}
             />
           </label>
-          <p className="mt-1 text-xs text-slate-500">
-            Any script is accepted. For example: chest pain, seene mein dard, gunde noppi.
-          </p>
+          <p className="mt-1 text-xs text-slate-500">{t.complaintScripts}</p>
           <div className="field-grid">
             <label className="field-label">
               {t.conditions}
@@ -240,30 +283,73 @@ export function LiveTriagePage() {
               <input className="field" value={form.medications} onChange={(event) => setForm({ ...form, medications: event.target.value })} />
             </label>
           </div>
+          <div className="field-grid">
+            <label className="field-label">
+              {t.nurseNotes}
+              <textarea
+                className="field min-h-20"
+                maxLength={2000}
+                value={form.nurse_notes}
+                onChange={(event) => setForm({ ...form, nurse_notes: event.target.value })}
+              />
+            </label>
+            <label className="field-label">
+              {t.uncertainInfo}
+              <textarea
+                className="field min-h-20"
+                maxLength={1000}
+                value={form.uncertain_information}
+                placeholder={t.uncertainPlaceholder}
+                onChange={(event) => setForm({ ...form, uncertain_information: event.target.value })}
+              />
+            </label>
+          </div>
         </fieldset>
 
         <div className="form-section flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-slate-500">The result is a suggestion. It is not a confirmed decision.</p>
+          <p className="text-sm text-slate-500">{t.suggestionNote}</p>
           <div className="flex gap-2">
             <button type="button" className="btn-secondary" onClick={clearAll}>
               {t.clear}
             </button>
-            <button type="submit" className="btn-primary px-6" disabled={submit.isPending}>
-              {submit.isPending ? t.loading : t.assess}
+            <button type="submit" className="btn-primary px-6" disabled={submit.isPending || result !== null}>
+              {submit.isPending ? t.loading : t.registerAssess}
             </button>
           </div>
         </div>
-        {submit.isError ? <p role="alert" className="mt-2 text-sm text-alert">{submit.error.message}</p> : null}
+        {submit.isError ? (
+          <div role="alert" className="error-note mt-2">
+            <p>{t.registrationFailed}</p>
+            <p className="font-normal">{submit.error.message}</p>
+            {submit.error instanceof ApiError && submit.error.fieldErrors.length > 0 ? (
+              <ul className="mt-1 list-disc pl-5 font-normal">
+                {submit.error.fieldErrors.map((item) => (
+                  <li key={`${item.field}-${item.message}`}>
+                    {fieldLabel(t, item.field)}: {item.message}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
       </form>
 
       <aside className={result ? "triage-side" : "triage-side is-sticky"} aria-live="polite">
         {result ? (
           <>
+            {result.opd_number ? (
+              <section className="opd-hero" aria-label={t.opdIssued}>
+                <p className="topbar-kicker">{t.opdIssued}</p>
+                <p className="opd-hero__number">{result.opd_number}</p>
+                <p className="text-sm text-slate-700">{t.opdTellPatient}</p>
+                {result.case_id ? <p className="mt-1 text-xs text-slate-500">{t.internalId(result.case_id)}</p> : null}
+                <button type="button" className="btn-secondary mt-3" onClick={clearAll}>
+                  {t.newRegistration}
+                </button>
+              </section>
+            ) : null}
             <section className="panel min-w-0">
-              <p className="topbar-kicker">Suggestion, not a decision</p>
-              {result.opd_number ? <p className="opd-number mt-1">{result.opd_number}</p> : null}
-              {result.case_id ? <p className="text-xs text-slate-500">Internal encounter ID: {result.case_id}</p> : null}
-              <div className="mt-4">
+              <div>
                 <ResultCard result={result} />
               </div>
             </section>
@@ -278,34 +364,31 @@ export function LiveTriagePage() {
           </>
         ) : (
           <section className="panel">
-            <h2 className="section-title">How this works</h2>
+            <h2 className="section-title">{t.howItWorks}</h2>
             <ol className="steps">
               <li className="step">
                 <span className="step-num">1</span>
                 <div>
-                  <p className="font-semibold">Enter what you have</p>
-                  <p className="text-sm text-slate-600">Vitals and the complaint in the patient's own words. Blank fields are fine.</p>
+                  <p className="font-semibold">{t.step1Title}</p>
+                  <p className="text-sm text-slate-600">{t.step1Body}</p>
                 </div>
               </li>
               <li className="step">
                 <span className="step-num">2</span>
                 <div>
-                  <p className="font-semibold">OPD Sentinel checks it</p>
-                  <p className="text-sm text-slate-600">It flags unusual vitals, applies the safety rules, and suggests a triage level and department.</p>
+                  <p className="font-semibold">{t.step2Title}</p>
+                  <p className="text-sm text-slate-600">{t.step2Body}</p>
                 </div>
               </li>
               <li className="step">
                 <span className="step-num">3</span>
                 <div>
-                  <p className="font-semibold">You decide</p>
-                  <p className="text-sm text-slate-600">Confirm, override, or escalate. Every action is written to the audit log.</p>
+                  <p className="font-semibold">{t.step3Title}</p>
+                  <p className="text-sm text-slate-600">{t.step3Body}</p>
                 </div>
               </li>
             </ol>
-            <p className="callout mt-4 text-sm">
-              Safety rules can only raise urgency. If the input cannot be assessed, you will see
-              "Cannot assess, send to nurse now".
-            </p>
+            <p className="callout mt-4 text-sm">{t.howCallout(t.cannotAssess)}</p>
           </section>
         )}
       </aside>

@@ -66,10 +66,15 @@ def apply_column_map(frame: pd.DataFrame, column_map: dict[str, Any]) -> pd.Data
     return mapped
 
 
-def load_table(path: Path) -> pd.DataFrame:
-    """Read a CSV and apply the configured column map."""
+def load_table(path: Path, *, use_column_map: bool = True) -> pd.DataFrame:
+    """Read a CSV and apply the configured column map.
+
+    The column map describes the official file. Prepared files that already use
+    logical names pass `use_column_map=False`.
+    """
     frame = pd.read_csv(path)
-    mapped = apply_column_map(frame, load_settings()["data"]["column_map"])
+    column_map = load_settings()["data"]["column_map"] if use_column_map else {}
+    mapped = apply_column_map(frame, column_map)
     mapped[LABEL_FIELDS[2]] = mapped["emergency"].astype(int)
     mapped["triage_level"] = mapped["triage_level"].astype(int)
     return mapped
@@ -163,15 +168,18 @@ def load_split(name: str, *, allow_test: bool = False) -> pd.DataFrame:
 
 
 def resolve_intake_source() -> tuple[Path, str]:
-    """Prefer the official file when it exists. Otherwise use the synthetic file."""
+    """Official file first, then the prepared KTAS public dataset, then synthetic."""
     settings = load_settings()
     official = repo_root() / settings["data"]["official_path"]
+    ktas = repo_root() / settings["data"]["ktas"]["intake_path"]
     synthetic = repo_root() / settings["data"]["synthetic_path"]
     if official.is_file():
         return official, "official"
+    if ktas.is_file():
+        return ktas, "public_deidentified_ktas"
     if synthetic.is_file():
         return synthetic, "synthetic"
     raise FileNotFoundError(
-        "No intake file found. Add the official file at data/raw/intake.csv "
-        "or run make data to write the labelled synthetic file."
+        "No intake file found. Run make ktas for the public KTAS dataset, add the official "
+        "file at data/raw/intake.csv, or run make data to write the labelled synthetic file."
     )

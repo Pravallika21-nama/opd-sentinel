@@ -6,10 +6,11 @@ import { useLocale, type Locale } from "../lib/i18n";
 type SystemInfo = {
   product: string;
   classical_available: boolean;
-  quantum_available: boolean;
-  quantum_role: string;
+  model?: { version?: string | null; emergency_threshold?: number | null; train_rows?: number | null };
   rules_banner: string;
   data_source: string;
+  dataset?: string | null;
+  dataset_licence?: string | null;
   evaluation_report: string;
   audit: string;
   wait_time_estimate: string;
@@ -26,8 +27,8 @@ export function SettingsPage() {
   return (
     <div className="flex max-w-3xl flex-col gap-4">
       <section className="panel">
-        <h2 className="font-semibold">Interface language</h2>
-        <p className="text-sm">Draft labels only. Product names stay in English. Not a clinical translation.</p>
+        <h2 className="font-semibold">{t.interfaceLanguage}</h2>
+        <p className="text-sm">{t.languageNote}</p>
         <div className="mt-2 flex gap-2">
           {locales.map((item) => (
             <button
@@ -43,39 +44,44 @@ export function SettingsPage() {
         </div>
       </section>
       <section className="panel">
-        <h2 className="font-semibold">Display</h2>
+        <h2 className="font-semibold">{t.display}</h2>
         <label className="mt-2 flex items-center gap-2 text-sm">
           <input type="checkbox" checked={compact} onChange={(event) => setCompact(event.target.checked)} />
-          Compact layout
+          {t.compactLayout}
         </label>
         <label className="mt-2 flex items-center gap-2 text-sm">
           <input type="checkbox" checked={demoMode} onChange={(event) => setDemoMode(event.target.checked)} />
-          Demo mode: show labelled illustrative cases
+          {t.demoModeLabel}
         </label>
       </section>
       <section className="panel">
-        <h2 className="font-semibold">System</h2>
+        <h2 className="font-semibold">{t.navSystem}</h2>
         {system.isPending ? <p role="status">{t.loading}</p> : null}
         {system.isError ? <p role="alert">{system.error.message}</p> : null}
         {info ? (
           <dl className="mt-2 grid grid-cols-[12rem_1fr] gap-y-2 text-sm">
-            <dt className="font-semibold">Product</dt>
+            <dt className="font-semibold">{t.product}</dt>
             <dd>{info.product}</dd>
             <dt className="font-semibold">Classical ML</dt>
-            <dd>{info.classical_available ? "Artefact present" : "Pending"}</dd>
-            <dt className="font-semibold">Quantum ML</dt>
-            <dd>{info.quantum_available ? "Artefact present" : "Pending"}. {info.quantum_role}</dd>
-            <dt className="font-semibold">Rules</dt>
+            <dd>
+              {info.classical_available ? t.artefactPresent : t.pending}
+              {info.model?.version ? ` · ${info.model.version}` : ""}
+              {info.model?.emergency_threshold != null ? ` · threshold ${info.model.emergency_threshold}` : ""}
+            </dd>
+            <dt className="font-semibold">{t.rulesLabel}</dt>
             <dd>{info.rules_banner}</dd>
-            <dt className="font-semibold">Data</dt>
-            <dd>{info.data_source}</dd>
-            <dt className="font-semibold">Evaluation file</dt>
+            <dt className="font-semibold">{t.dataLabel}</dt>
+            <dd>
+              {info.dataset ?? info.data_source}
+              {info.dataset_licence ? ` · ${info.dataset_licence}` : ""}
+            </dd>
+            <dt className="font-semibold">{t.evaluationFile}</dt>
             <dd>{info.evaluation_report}</dd>
-            <dt className="font-semibold">Audit</dt>
+            <dt className="font-semibold">{t.auditLabel}</dt>
             <dd>{info.audit}</dd>
-            <dt className="font-semibold">Predicted wait</dt>
+            <dt className="font-semibold">{t.predictedWait}</dt>
             <dd>{info.wait_time_estimate === "unavailable" ? t.waitUnavailable : info.wait_time_estimate}</dd>
-            <dt className="font-semibold">Complaint</dt>
+            <dt className="font-semibold">{t.colComplaint}</dt>
             <dd>{info.complaint_note}</dd>
           </dl>
         ) : null}

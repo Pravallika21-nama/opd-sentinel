@@ -112,7 +112,6 @@ def test_rule_never_downgrades_model(
     decision = arbitrate(
         intake,
         ModelView(level=model_level, p_emergency=0.2, department="General Medicine"),
-        None,
     )
     if decision.fired_rules and decision.triage_level is not None:
         assert decision.triage_level <= model_level

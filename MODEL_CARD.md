@@ -1,74 +1,87 @@
 # Model card — OPD Sentinel
 
-Decision support for a nurse who has about a minute per walk-in patient. The nurse confirms or overrides every suggestion. The tool does not diagnose and does not replace a doctor.
+Decision support for a nurse who has about a minute per walk-in patient. The nurse confirms or overrides every suggestion, and a doctor makes the diagnosis. The tool does not diagnose and does not replace a doctor.
 
 ## Out of scope
 
-Diagnosis, treatment advice, and any decision that skips Nurse Review.
+Diagnosis, treatment or prescribing advice, and any decision that skips Nurse Review. The model output is never copied into the doctor's diagnosis or prescription fields.
 
 ## Data
 
-Official intake data is not in this repository. `make data` writes `data/synthetic/intake_synthetic.csv` with `record_source=synthetic` when `data/raw/intake.csv` is absent. The column map in `config/settings.yaml` is the schema adapter. Official headers are null until they are known. They are not guessed.
+See [DATASET.md](DATASET.md). The current artefacts were trained on the public KTAS dataset (Moon et al., PLOS ONE 2019, CC BY 4.0): 1,267 real, de-identified **emergency-department** records from Korea. Those records are not OPD data. When the official intake file is placed at `data/raw/intake.csv`, it takes priority. When neither is present, a labelled synthetic file is used.
 
-Hidden labels (`triage_level`, `department`, `emergency`) are not features. The test split is not used for training or threshold tuning.
-
-The synthetic generator uses English, Hindi (roman and Devanagari), and Telugu (roman and script) complaint templates, about 4% emergencies, and injected noise (BP 0, temperature 96, a Fahrenheit-looking value, missing vitals).
+Hidden labels (`triage_level`, `department`, `emergency`) and the triage nurse's reference level are never features. The test split is not used for training, threshold tuning, or model selection.
 
 ## Features
 
-Shared by both paths, fit on the training split only:
+These are fitted on the training split only. The input schema and preprocessing are unchanged from the original project:
 
-- Age and vitals, with missing and implausible indicators. Implausible numbers are replaced in the feature matrix by the training median and flagged. The stored raw entry is not rewritten.
+- Age and vitals, with missing and implausible indicators. In the feature matrix, implausible numbers are replaced by the training median and flagged. The stored raw entry is not rewritten.
 - Sex flags, including Hindi and Telugu tokens.
-- Comorbidity and medication flags from free text.
+- Comorbidity and medication flags from free text. These are empty for KTAS.
 - Red-flag count from the lexicon.
-- Character n-grams (`char_wb`, range from `config/settings.yaml`) of the normalised complaint. The original complaint is kept on the case.
+- Character n-grams (`char_wb`, 2–4, at most 600 features) of the normalised complaint.
 
-Quantum ML then keeps 4 of the numeric vitals/age columns chosen by mutual information on the training split and scales them to `[0, pi]`. The chosen names are written into `backend/ml/artifacts/quantum_meta.json` by `make train`.
+## Model
 
-## Models
+Classical ML is the only model. Quantum ML has been removed from the code, configuration, dependencies, and interface.
 
-| Path | Role |
-| --- | --- |
-| Classical ML | Live workflow. Emergency classifier, triage level 1–5 classifier, and department classifier. Logistic regression and histogram gradient boosting are both fit. The emergency and triage heads are chosen by validation asymmetric cost, not accuracy. Emergency probabilities use sigmoid calibration when the folds allow it. The emergency threshold is tuned on the validation split. |
-| Quantum ML | Experiment only. PennyLane `default.qubit`. `AngleEmbedding` plus 2 `StronglyEntanglingLayers`. PauliZ(0) expectation is mapped to a risk score. A data re-uploading circuit exists and is off unless `quantum.data_reupload` is true. An optional fidelity kernel is implemented and is not trained or used by the API. |
+| Head | Selection | Current artefact |
+| --- | --- | --- |
+| Emergency (level 1–2) | Logistic regression and histogram gradient boosting are both fitted. The winner is the one with the lowest validation asymmetric cost. Probabilities are sigmoid-calibrated (3-fold) | Logistic regression, threshold 0.1 tuned on validation |
+| Triage level 1–5 | Same candidates, same validation cost | Logistic regression |
+| Department | Trained only when every training row has a department label and there are at least two classes | Not trained. KTAS has no department label |
 
-No speedup and no quantum advantage are claimed.
+Configured values in `config/settings.yaml`: seed 42; emergency class weight 20; under-triage of an emergency costs 20 and over-triage costs 1. Model version 0.2.0.
 
-## Hyperparameters
+Validation split only (190 rows, 37 emergencies): emergency recall 0.9189, with 3 emergencies missed, 52 false alerts, and cost 112. These figures are not test results.
 
-These are the configured values in `config/settings.yaml`, not measured outcomes.
+If the model file is missing or raises an error, `/triage` still stores the case. It marks `model_status` as `unavailable` or `error` and abstains ("Cannot assess, send to nurse now"). It never substitutes a fixed prediction.
 
-- Seed: 42
-- Classical emergency class weight: 20
-- TF-IDF character n-grams: 2–4, max 600 features
-- Quantum simulator: `default.qubit`
-- Quantum features: 4
-- Quantum layers: 2
-- Quantum data re-upload: false
-- Quantum train subsample cap: 48 rows, at least 12 positives (the mix is not the population prevalence)
-- Quantum epochs: 4, batch size 8, Adam step 0.2, early-stop patience 2
-- Request timeout for Quantum ML: 0.75 seconds. On timeout the case continues on Classical ML and the UI shows "Quantum ML unavailable"
+## Safety-Rule Layer
 
-The fitted threshold, the selected model names, the mutual-information feature list, and the loss curve are written beside the artefacts by `make train`. Those files are not committed.
-
-From the local artefacts for this synthetic run (`test_set_used` is false in both metadata files):
-
-- Classical ML emergency head: histogram gradient boosting, validation threshold 0.25, validation emergency recall 0.9286, missed emergencies 1, asymmetric cost 23.
-- Classical ML triage head: logistic regression. Department head: histogram gradient boosting.
-- Quantum ML features chosen on the training split: pulse, temperature_c, diastolic_bp, spo2. Training stopped after 3 epochs. Validation threshold 0.7, validation emergency recall 0.0, missed emergencies 14, asymmetric cost 280. That validation figure is not a test-set result and is not an advantage claim.
+The rules in `config/safety_rules.yaml` run after the model and can only keep or raise urgency. They cannot downgrade it. Every rule has `clinically_reviewed: false`. When input is too incomplete or implausible, the pipeline abstains, and an abstention counts as urgent.
 
 ## Results
 
-Copied from the local `reports/results.md` written by `make eval` on 2026-10-14. The report files are not committed. A clean clone prints Pending on the Evaluation page until that command is run again. These figures are a local proxy on the synthetic test split (360 rows, 14 emergencies). They are not an official score and they are not a clinical claim.
+These come from `make eval`, generated on 2026-10-15, on the KTAS **test** split: 191 records, 37 expert level 1–2 cases. The evaluation is a local proxy labelled `proxy, not official`. It is not a clinical validation. Report files are not committed, so a clean clone shows Pending until the command runs.
 
-| Path | Emergency recall | Missed emergencies | False alerts | Asymmetric cost |
-| --- | --- | --- | --- | --- |
-| Classical ML | 1 | 0 | 10 | 10 |
-| Quantum ML (simulator) | 0 | 14 | 0 | 280 |
-| Full pipeline | 1 | 0 | 19 | 19 |
+| Measure | Classical ML | Triage nurses (KTAS_RN, same rows) | Full system (rules + model) |
+| --- | --- | --- | --- |
+| Emergency recall | 0.9189 (95% CI 0.84–1.0) | 0.8649 | 0.9189 |
+| Missed emergencies | 3 | 5 | 3 |
+| False alerts | 65 | 3 | 69 |
+| Emergency precision | 0.3434 | 0.9143 | 0.3301 |
+| Triage-level accuracy | 0.466 | 0.8325 | 0.4555 |
+| Asymmetric cost | 125 | 103 | 129 |
 
-Classical ML triage-level accuracy on that split was 0.8083 and department accuracy was 0.9556. The pipeline abstained on 1 of 360 cases (rate 0.0028); that case was not a labelled emergency. Inference on this machine: Classical ML p50 72.77 ms, Quantum ML p50 9.47 ms, pipeline p50 83.91 ms. Quantum ML did not catch the held-out emergencies in this run. No speedup and no quantum advantage are claimed. Fairness slices with fewer than 5 emergencies stay Pending and do not establish fairness. The queue simulation is labelled with its assumptions in the same report.
+Per level, Classical ML recall was 0.0 for level 1 (2 cases), 0.9143 for level 2, 0.3333 for level 3, 0.4722 for level 4, and 0.0 for level 5 (13 cases; level 5 was never predicted). The pipeline abstained on 10 of 191 cases (rate 0.0524).
+
+What this means:
+
+- On the same records, the model misses slightly fewer emergencies than the triage nurses did. It does so by over-calling urgency, with about 20 times as many false alerts.
+- Its level 1–5 agreement with experts is far below the nurses'. It sees only the intake form: no respiratory rate, mental status, pain score, or arrival mode. Treat the level as a prompt for nurse review, not an answer.
+- The nurse column is a historical human reference. It is not a head-to-head trial.
+
+Descriptive slices: emergency recall was 0.9231 for females (13 emergencies) and 0.9167 for males (24). For ages 18–64 it was 0.8947 (19 emergencies) and for 65+ it was 0.9444 (18). The under-18 group (4 records) stays Pending because it had fewer than 5 emergencies. These slices do not establish fairness.
+
+On this machine, median inference was 4.79 ms for Classical ML and 6.56 ms for the full pipeline. That is not a clinical latency claim.
+
+### External test: MIMIC-IV-ED Demo v2.2 (USA)
+
+The same model file, without retraining or threshold changes, was scored on the open MIMIC-IV-ED Demo (`external_mimic_demo` section of `reports/results.json`). 222 stays, 207 with an ESI level, 115 of them ESI 1–2. The reference is the **triage nurse's ESI level**, so this measures agreement with a nurse, not accuracy against experts.
+
+| Measure | Classical ML | Full system (rules + model) | Nurse ESI 1–2 |
+| --- | --- | --- | --- |
+| Recall for nurse ESI 1–2 | 0.8174 (95% CI 0.748–0.891) | 0.8522 (95% CI 0.781–0.922) | reference |
+| Missed nurse-urgent stays | 21 | 17 | — |
+| Extra urgent calls | 51 | 53 | — |
+| Abstentions (counted as urgent) | — | 9 (0.0435) | — |
+| Level agreement with ESI | 0.4638 | — | — |
+| Sensitivity for hospital admission | 0.777 | 0.8129 | 0.6619 |
+| Specificity for hospital admission | 0.4559 | 0.4412 | 0.6618 |
+
+Recall dropped from 0.92 on KTAS to 0.82 here, which is the expected direction for a change of country, triage scale, and complaint wording (US abbreviations such as SOB against KTAS wording). Conditions and medications are absent in this dataset. The sample is small, so the intervals are wide.
 
 ## Limitations
 

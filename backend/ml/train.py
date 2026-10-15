@@ -1,4 +1,4 @@
-"""Training entry point for Classical ML and Quantum ML.
+"""Training entry point for Classical ML.
 
 `make train` calls this module. It fits on the train split and selects
 thresholds on the validation split. It refuses to read the test split.
@@ -17,10 +17,9 @@ from core.config_loader import load_settings
 from core.paths import repo_root
 from ml.classical import fit_classical
 from ml.dataset import load_split
-from ml.predict import artifact_path, load_classical
-from ml.quantum import fit_quantum
+from ml.predict import artifact_path
 
-MODEL_VERSION = "0.1.0"
+MODEL_VERSION = "0.2.0"
 
 
 def _configure_stdio() -> None:
@@ -46,12 +45,20 @@ def _write(bundle: Any, artifact_key: str, meta_key: str) -> None:
     print(f"Wrote {meta_path.relative_to(repo_root())}")
 
 
-def main() -> None:
-    """Train Classical ML, then the Quantum ML experiment.
+def _data_source(settings: dict[str, Any]) -> dict[str, Any]:
+    manifest = repo_root() / settings["data"]["processed_dir"] / "manifest.json"
+    if not manifest.is_file():
+        return {"source_kind": "unknown"}
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    return {
+        key: payload.get(key)
+        for key in ("source_kind", "dataset", "licence", "label_mapping")
+        if key in payload
+    }
 
-    `--quantum-only` keeps the saved Classical ML artefact and reuses its
-    training-split medians.
-    """
+
+def main() -> None:
+    """Train Classical ML and write the artefact and its metadata."""
     _configure_stdio()
     settings = load_settings()
     seed = int(settings["random_seed"])
@@ -59,17 +66,10 @@ def main() -> None:
     val = load_split("val", allow_test=False)
     train_path = repo_root() / settings["data"]["processed_dir"] / "train.csv"
     data_hash = _sha256(train_path)
+    source = _data_source(settings)
     print("OPD Sentinel training")
+    print(f"Data source: {source.get('source_kind')}")
     print(f"Train rows: {len(train)}. Validation rows: {len(val)}. Test split: not loaded.")
-    if "--quantum-only" in sys.argv[1:]:
-        existing = load_classical()
-        if existing is None or existing.builder is None:
-            raise RuntimeError("--quantum-only needs a trained Classical ML artefact")
-        if existing.metadata.get("data_sha256") != data_hash:
-            raise RuntimeError("Classical ML artefact was trained on a different train split")
-        print("Classical ML: kept as saved (--quantum-only).")
-        _train_quantum(train, val, existing.builder.medians, seed, settings, data_hash)
-        return
     classical_cfg = settings["classical"]
     classical = fit_classical(
         train,
@@ -85,6 +85,7 @@ def main() -> None:
             "model_version": MODEL_VERSION,
             "seed": seed,
             "data_sha256": data_hash,
+            "data_source": source,
             "train_rows": int(len(train)),
             "val_rows": int(len(val)),
         }
@@ -94,56 +95,20 @@ def main() -> None:
     combined = classical.metadata["validation_combined_level_cost"]
     print("Validation only (not the test set):")
     print(
-        "  Classical ML emergency head: "
+        "  Emergency head: "
         f"recall={head['emergency_recall']}, "
         f"missed={head['missed_emergencies']}, "
         f"asymmetric cost={head['cost']}, "
         f"threshold={classical.emergency_threshold}"
     )
     print(
-        "  Classical ML level after that threshold: "
+        "  Level after that threshold: "
         f"recall={combined['emergency_recall']}, "
         f"missed={combined['missed_emergencies']}, "
         f"asymmetric cost={combined['cost']}"
     )
-    if classical.builder is None:
-        raise RuntimeError("Classical ML feature builder is missing")
-    _train_quantum(train, val, classical.builder.medians, seed, settings, data_hash)
-
-
-def _train_quantum(
-    train: Any,
-    val: Any,
-    medians: dict[str, float],
-    seed: int,
-    settings: dict[str, Any],
-    data_hash: str,
-) -> None:
-    print("Quantum ML: simulator only (default.qubit). No speedup or advantage is assumed.")
-    quantum = fit_quantum(
-        train,
-        val,
-        medians=medians,
-        seed=seed,
-        config=settings["quantum"],
-    )
-    quantum.metadata.update(
-        {
-            "model_version": MODEL_VERSION,
-            "seed": seed,
-            "data_sha256": data_hash,
-        }
-    )
-    _write(quantum, "quantum", "quantum_meta")
-    q_stats = quantum.metadata["validation_at_threshold"]
-    print(
-        "  Quantum ML validation: "
-        f"recall={q_stats.get('emergency_recall')}, "
-        f"missed={q_stats.get('missed_emergencies')}, "
-        f"asymmetric cost={q_stats.get('cost')}. "
-        "These are validation figures, not test-set results."
-    )
-    print(f"Quantum ML features: {', '.join(quantum.feature_names)}")
+    if classical.department_model is None:
+        print("  Department head: not trained. The training data has no department label.")
 
 
 if __name__ == "__main__":
