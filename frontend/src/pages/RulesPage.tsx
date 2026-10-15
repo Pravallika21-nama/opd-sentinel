@@ -72,7 +72,8 @@ export function RulesPage() {
           <article key={rule.id} className="panel">
             <h2 className="font-semibold">{rule.id}</h2>
             <p className="text-sm">{rule.description}</p>
-            <p className="mt-1 text-sm">Minimum level {rule.min_level}. {rule.reason}</p>
+            <p className="mt-1 text-sm">Minimum level {rule.min_level}. This raises urgency to this level when it fires. It does not lower a more urgent level. {rule.reason}</p>
+            {rule.when ? <p className="mt-1 text-xs">Condition: {JSON.stringify(rule.when)}</p> : null}
             <p className="mt-1 text-xs">
               Review status: {rule.clinically_reviewed ? "reviewed" : "not clinically reviewed"}. Version: config file.
             </p>

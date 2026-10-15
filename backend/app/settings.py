@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     api_port: int = 8000
     database_path: str = "data/sentinel.db"
     seed_demo: bool = False
+    mimic_ed_dir: str = ""
     cors_origins: list[str] = Field(
         default_factory=lambda: [
             "http://localhost:5173",

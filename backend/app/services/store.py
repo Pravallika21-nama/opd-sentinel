@@ -15,6 +15,7 @@ from app.db import (
     CaseRecord,
     NurseReviewRecord,
     PredictionRecord,
+    allocate_opd_number,
     session_scope,
 )
 from app.schemas import IntakeRequest, QueueItem, ReviewRequest, TriageResponse
@@ -33,6 +34,19 @@ def _preview(complaint: str) -> str:
     return text[:117] + "..."
 
 
+def _stored_number(raw: dict[str, Any], key: str) -> float | None:
+    """Return the stored number. Blank and non-numeric entries stay missing."""
+    value = raw.get(key)
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def triage_and_store(intake: IntakeRequest, *, case_id: str | None = None) -> TriageResponse:
     """Score one intake, store it, and append an audit row."""
     raw = intake.model_dump(mode="json")
@@ -42,9 +56,11 @@ def triage_and_store(intake: IntakeRequest, *, case_id: str | None = None) -> Tr
     arrival = intake.arrival_time.isoformat() if intake.arrival_time else _now()
     created = _now()
     payload = decision.model_dump(mode="json")
+    opd_number = ""
     with session_scope() as session:
         existing = session.get(CaseRecord, stored_id)
         if existing is None:
+            opd_number = allocate_opd_number(session, created)
             session.add(
                 CaseRecord(
                     id=stored_id,
@@ -53,8 +69,13 @@ def triage_and_store(intake: IntakeRequest, *, case_id: str | None = None) -> Tr
                     raw_json=json.dumps(raw),
                     illustrative=1 if illustrative else 0,
                     complaint_preview=_preview(intake.complaint),
+                    opd_number=opd_number,
                 )
             )
+        else:
+            opd_number = existing.opd_number or allocate_opd_number(session, existing.created_at)
+            if not existing.opd_number:
+                existing.opd_number = opd_number
         session.add(
             PredictionRecord(
                 id=f"pred-{uuid.uuid4().hex[:12]}",
@@ -74,7 +95,12 @@ def triage_and_store(intake: IntakeRequest, *, case_id: str | None = None) -> Tr
             )
         )
         session.commit()
-    return TriageResponse(case_id=stored_id, latency_ms=round(latency_ms, 2), **payload)
+    return TriageResponse(
+        case_id=stored_id,
+        opd_number=opd_number,
+        latency_ms=round(latency_ms, 2),
+        **payload,
+    )
 
 
 def list_queue() -> list[QueueItem]:
@@ -96,6 +122,7 @@ def list_queue() -> list[QueueItem]:
                 ).all()
             )
             output = json.loads(prediction.output_json) if prediction else {}
+            raw = json.loads(case.raw_json)
             status, level, reassessment = _queue_state(output, reviews)
             issues = output.get("validation_issues") or []
             warning = any(
@@ -109,6 +136,7 @@ def list_queue() -> list[QueueItem]:
             items.append(
                 QueueItem(
                     id=case.id,
+                    opd_number=case.opd_number or "",
                     arrival_time=case.arrival_time,
                     wait_seconds=max(0.0, round(wait, 1)),
                     triage_level=level,
@@ -122,6 +150,11 @@ def list_queue() -> list[QueueItem]:
                     data_quality="warning" if warning else "ok",
                     red_flag=bool(output.get("red_flags")),
                     reassessment=reassessment,
+                    systolic_bp=_stored_number(raw, "systolic_bp"),
+                    diastolic_bp=_stored_number(raw, "diastolic_bp"),
+                    pulse=_stored_number(raw, "pulse"),
+                    temperature_c=_stored_number(raw, "temperature_c"),
+                    spo2=_stored_number(raw, "spo2"),
                 )
             )
     items.sort(key=_queue_key)
@@ -143,6 +176,7 @@ def get_case(case_id: str) -> dict[str, Any]:
         ).all()
         return {
             "case_id": case.id,
+            "opd_number": case.opd_number or "",
             "arrival_time": case.arrival_time,
             "illustrative": bool(case.illustrative),
             "input": json.loads(case.raw_json),

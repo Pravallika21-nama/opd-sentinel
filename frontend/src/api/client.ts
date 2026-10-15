@@ -13,6 +13,7 @@ export type ModelView = {
 
 export type TriageResult = {
   case_id?: string;
+  opd_number?: string;
   triage_level: number | null;
   department: string | null;
   department_source?: "classical" | "keyword_hint" | null;
@@ -40,6 +41,7 @@ export type TriageResult = {
 
 export type QueueItem = {
   id: string;
+  opd_number?: string;
   arrival_time: string;
   wait_seconds: number;
   triage_level: number | null;
@@ -55,6 +57,11 @@ export type QueueItem = {
   reassessment?: "none" | "requested";
   position_reason?: string;
   rank?: number;
+  systolic_bp?: number | null;
+  diastolic_bp?: number | null;
+  pulse?: number | null;
+  temperature_c?: number | null;
+  spo2?: number | null;
 };
 
 const base = () => import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";

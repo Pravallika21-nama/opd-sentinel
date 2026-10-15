@@ -45,40 +45,21 @@ export function ResultCard({ result }: { result: TriageResult }) {
         </p>
       ) : null}
 
-      <div className="grid gap-3 md:grid-cols-2">
-        <section className="rounded-lg border border-line bg-card p-4" aria-label="Classical ML">
-          <h3 className="text-lg font-semibold">Classical ML</h3>
-          {result.classical ? (
-            <>
-              <p className="mt-2 text-lg">
-                Level {result.classical.level}. Emergency probability {result.classical.p_emergency.toFixed(3)}.
-              </p>
-              <p className="mt-2 text-sm">
-                Live recommendation. Not a diagnosis. The probability is not clinical certainty.
-              </p>
-            </>
-          ) : (
-            <p className="mt-2">Classical ML artefact is not available.</p>
-          )}
-        </section>
-        <section className="rounded-lg border border-line bg-card p-4" aria-label="Quantum ML">
-          <h3 className="text-lg font-semibold">
-            Quantum ML <span className="font-normal">({t.experimental})</span>
-          </h3>
-          {result.quantum ? (
-            <>
-              <p className="mt-2 text-lg">
-                Level {result.quantum.level}. Risk score {result.quantum.p_emergency.toFixed(3)}. Simulator only.
-              </p>
-              <p className="mt-2 text-sm">
-                Experimental. It does not make the live decision and cannot lower urgency.
-              </p>
-            </>
-          ) : (
-            <p className="mt-2 font-semibold">Quantum ML unavailable</p>
-          )}
-        </section>
-      </div>
+      <section className="rounded-lg border border-line bg-paper p-3" aria-label="Classical ML">
+        <h3 className="text-base font-semibold">Classical ML</h3>
+        {result.classical ? (
+          <>
+            <p className="mt-2">
+              Level {result.classical.level}. Emergency probability {result.classical.p_emergency.toFixed(3)}.
+            </p>
+            <p className="mt-1 text-sm">
+              Live recommendation. Not a diagnosis. The probability is not clinical certainty.
+            </p>
+          </>
+        ) : (
+          <p className="mt-2">Classical ML artefact is not available.</p>
+        )}
+      </section>
 
       <section aria-label="Red flags">
         <h3 className="text-lg font-semibold">Red flags</h3>
@@ -114,6 +95,20 @@ export function ResultCard({ result }: { result: TriageResult }) {
         <span className="font-semibold">Uncertainty: </span>
         {result.uncertainty === null ? "Pending" : result.uncertainty.toFixed(2)}
       </p>
+
+      <section className="rounded-md border border-line bg-paper px-3 py-2 text-sm" aria-label="Quantum ML">
+        <h3 className="font-semibold">
+          Quantum ML <span className="font-normal">({t.experimental})</span>
+        </h3>
+        {result.quantum ? (
+          <p className="mt-1">
+            Level {result.quantum.level}. Risk score {result.quantum.p_emergency.toFixed(3)}. Simulator only.
+            Experimental. It does not make the live decision and cannot lower urgency.
+          </p>
+        ) : (
+          <p className="mt-1 font-semibold">Quantum ML unavailable</p>
+        )}
+      </section>
       {result.latency_ms !== undefined ? <p>Latency {result.latency_ms} ms</p> : null}
 
       {result.validation_issues.length > 0 ? (

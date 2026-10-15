@@ -32,6 +32,11 @@ export function NurseActions({
   });
 
   function send(action: "confirm" | "override" | "escalate" | "reassess") {
+    if (action === "override" || action === "escalate") {
+      const label = action === "override" ? `Override to level ${level}` : "Escalate for immediate assessment";
+      if (!window.confirm(`${label}? This is recorded in the audit log.`)) return;
+    }
+    setNote(null);
     const body: Record<string, unknown> = { action, reason };
     if (action === "override") {
       body.triage_level = level;
@@ -106,8 +111,8 @@ export function NurseActions({
       {abstain && suggestedLevel === null ? (
         <p className="mt-2 text-sm">There is no level to confirm. Override or escalate instead.</p>
       ) : null}
-      {review.isError ? <p role="alert">{review.error.message}</p> : null}
-      {note ? <p role="status">{note}</p> : null}
+      {review.isError ? <p role="alert">The review was not saved. {review.error.message}</p> : null}
+      {note && !review.isError ? <p role="status">{note}</p> : null}
     </section>
   );
 }

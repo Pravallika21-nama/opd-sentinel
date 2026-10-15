@@ -32,7 +32,11 @@ def binary_cost(
         "missed_emergencies": missed,
         "false_alerts": false_alerts,
         "caught_emergencies": caught,
+        "true_negatives": int(((truth == 0) & (pred == 0)).sum()),
         "emergency_recall": recall,
+        "emergency_precision": (
+            None if (caught + false_alerts) == 0 else caught / (caught + false_alerts)
+        ),
         "cost": float(under) * missed + float(over) * false_alerts,
     }
 

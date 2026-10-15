@@ -29,11 +29,9 @@ const empty = {
 };
 
 const vitalNames = [
-  ["systolic_bp", "systolic"],
-  ["diastolic_bp", "diastolic"],
-  ["pulse", "pulse"],
-  ["temperature_c", "temp"],
-  ["spo2", "spo2"],
+  ["pulse", "pulse", "bpm"],
+  ["temperature_c", "temp", "°C"],
+  ["spo2", "spo2", "%"],
 ] as const;
 
 function hint(name: string, raw: string, ranges: Ranges | undefined): string {
@@ -46,11 +44,19 @@ function hint(name: string, raw: string, ranges: Ranges | undefined): string {
     return "Looks like Fahrenheit. It will be flagged, not converted.";
   }
   if (value < spec.min || value > spec.max) return `Outside placeholder range ${spec.min}–${spec.max}.`;
-  return "Within the placeholder range.";
+  return "";
 }
 
 function statusOf(issues: FieldIssue[], field: string): string {
   return issues.find((issue) => issue.field === field)?.status ?? "";
+}
+
+function statusLabel(status: string): string {
+  if (status === "ok") return "Valid";
+  if (status === "missing") return "Missing";
+  if (status === "implausible") return "Implausible";
+  if (status === "conflicting") return "Conflicting";
+  return "";
 }
 
 export function LiveTriagePage() {
@@ -110,51 +116,88 @@ export function LiveTriagePage() {
   const issues = result?.validation_issues ?? [];
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[20rem_minmax(0,1fr)_18rem]">
+    <div className="triage-workspace">
       <form className="panel" onSubmit={onSubmit}>
         <h1 className="text-lg font-semibold">{t.live}</h1>
         <p className="mt-1 text-sm">
           Missing fields can be left blank. The original entry is kept. The complaint is stored as typed.
         </p>
         {banner ? <p className="mt-2 rounded-md border border-amber bg-amber/10 px-3 py-2 text-sm font-semibold">{banner}</p> : null}
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <label className="text-sm font-semibold">
-            {t.sex}
-            <input className="field mt-1 w-full" value={form.sex} onChange={(event) => setForm({ ...form, sex: event.target.value })} />
-          </label>
-          <label className="text-sm font-semibold">
-            {t.age}
-            <input className="field mt-1 w-full" inputMode="decimal" value={form.age} onChange={(event) => setForm({ ...form, age: event.target.value })} />
-          </label>
-        </div>
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          {vitalNames.map(([name, label]) => {
-            const status = statusOf(issues, name);
+        <fieldset className="mt-4">
+          <legend className="text-sm font-semibold">Patient / encounter</legend>
+          <p className="text-xs">The OPD number is assigned by the server when this case is stored.</p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <label className="text-sm font-semibold">
+              {t.sex}
+              <input className="field mt-1 w-full" value={form.sex} onChange={(event) => setForm({ ...form, sex: event.target.value })} />
+            </label>
+            <label className="text-sm font-semibold">
+              {t.age}
+              <input className="field mt-1 w-full" inputMode="decimal" value={form.age} onChange={(event) => setForm({ ...form, age: event.target.value })} />
+            </label>
+          </div>
+        </fieldset>
+        <fieldset className="mt-4">
+          <legend className="text-sm font-semibold">Vital signs</legend>
+          <p className="text-xs">Blank is allowed. The original entry is kept.</p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <label className="text-sm font-semibold" htmlFor="systolic_bp">
+              {t.systolic} (mmHg)
+              <input id="systolic_bp" className="field mt-1 w-full" inputMode="decimal" value={form.systolic_bp} onChange={(event) => setForm({ ...form, systolic_bp: event.target.value })} />
+            </label>
+            <label className="text-sm font-semibold" htmlFor="diastolic_bp">
+              {t.diastolic} (mmHg)
+              <input id="diastolic_bp" className="field mt-1 w-full" inputMode="decimal" value={form.diastolic_bp} onChange={(event) => setForm({ ...form, diastolic_bp: event.target.value })} />
+            </label>
+          </div>
+          {vitalNames.map(([name, label, unit]) => {
+            const reported = statusOf(issues, name);
+            const status = reported || (result && form[name].trim() ? "ok" : "");
+            const typedHint = hint(name, form[name], ranges.data);
+            const message = status ? statusLabel(status) : typedHint;
             return (
-              <label key={name} className="text-sm font-semibold">
-                {t[label]}
+              <div key={name}>
+                <label className="text-sm font-semibold" htmlFor={name}>
+                  {t[label]} ({unit})
+                </label>
                 <input
+                  id={name}
                   className="field mt-1 w-full"
                   inputMode="decimal"
                   value={form[name]}
+                  aria-describedby={message ? `${name}-status` : undefined}
                   onChange={(event) => setForm({ ...form, [name]: event.target.value })}
                 />
-                <span className={`mt-1 block text-xs font-medium ${status === "ok" || status === "" ? "text-ink" : "text-alert"}`}>
-                  {status ? status : hint(name, form[name], ranges.data) || "Blank is allowed."}
-                </span>
-              </label>
+                {message ? (
+                  <p
+                    id={`${name}-status`}
+                    className={`status-note ${status === "implausible" || status === "conflicting" ? "is-alert" : ""}`}
+                  >
+                    {message}
+                    {status && typedHint ? `. ${typedHint}` : ""}
+                  </p>
+                ) : null}
+              </div>
             );
           })}
+        </fieldset>
+        <fieldset className="mt-4">
+          <legend className="text-sm font-semibold">Complaint and history</legend>
+          <div className="mt-2">
+          <label className="flex flex-col gap-1 text-sm font-semibold" htmlFor="complaint">
+            {t.complaint}
+            <input
+              id="complaint"
+              className="field"
+              value={form.complaint}
+              placeholder="As the patient speaks"
+              onChange={(event) => setForm({ ...form, complaint: event.target.value })}
+            />
+          </label>
+          <p className="mt-1 text-xs font-normal">
+            Any script is accepted. Examples: chest pain, seene mein dard, gunde noppi.
+          </p>
         </div>
-        <label className="mt-2 flex flex-col gap-1 text-sm font-semibold">
-          {t.complaint}
-          <input
-            className="field"
-            value={form.complaint}
-            placeholder="chest pain / seene mein dard / గుండె నొప్పి"
-            onChange={(event) => setForm({ ...form, complaint: event.target.value })}
-          />
-        </label>
         <label className="mt-2 flex flex-col gap-1 text-sm font-semibold">
           {t.conditions}
           <input className="field" value={form.known_conditions} onChange={(event) => setForm({ ...form, known_conditions: event.target.value })} />
@@ -163,11 +206,12 @@ export function LiveTriagePage() {
           {t.medications}
           <input className="field" value={form.medications} onChange={(event) => setForm({ ...form, medications: event.target.value })} />
         </label>
-        <div className="mt-3 flex gap-2">
-          <button type="submit" className="btn-primary">{t.assess}</button>
+        </fieldset>
+        <div className="mt-3 flex flex-col gap-2">
+          <button type="submit" className="btn-primary w-full">{t.assess}</button>
           <button
             type="button"
-            className="btn-secondary"
+            className="btn-secondary w-full"
             onClick={() => {
               setForm(empty);
               setBanner(null);
@@ -180,8 +224,8 @@ export function LiveTriagePage() {
         {submit.isPending ? <p role="status">{t.loading}</p> : null}
         {submit.isError ? <p role="alert">{submit.error.message}</p> : null}
         {demoMode ? (
-          <section className="mt-4" aria-label={t.examples}>
-            <h2 className="text-sm font-semibold">{t.examples}</h2>
+          <details className="mt-4">
+            <summary className="cursor-pointer text-sm font-semibold">{t.examples}</summary>
             <p className="text-xs">Example, not a real clinical outcome.</p>
             <div className="mt-2 flex flex-col gap-1">
               {(demos.data?.cases ?? []).map((item) => (
@@ -190,17 +234,16 @@ export function LiveTriagePage() {
                 </button>
               ))}
             </div>
-          </section>
+          </details>
         ) : null}
       </form>
 
       <section className="panel min-w-0" aria-live="polite">
-        <h2 className="text-lg font-semibold">Assessment</h2>
+        <h2 className="text-lg font-semibold">Assessment and safety review</h2>
+        <p className="text-sm">This is the model and Safety-Rule recommendation. It is not a nurse-confirmed decision.</p>
+        {result?.opd_number ? <p className="mt-2 text-2xl font-semibold">{result.opd_number}</p> : null}
         {result?.case_id ? (
-          <p className="mt-1 text-sm">
-            <span className="font-semibold">{t.encounter}: </span>
-            {result.case_id}
-          </p>
+          <p className="text-sm">Internal encounter ID: {result.case_id}</p>
         ) : (
           <p className="mt-2 text-sm">The result appears here after submit.</p>
         )}

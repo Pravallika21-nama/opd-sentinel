@@ -9,7 +9,7 @@ PY := .venv/bin/python
 SYS_PY := python3
 endif
 
-.PHONY: help setup data train eval api web test demo lint
+.PHONY: help setup data train eval mimic api web test demo lint
 
 help:
 	@echo OPD Sentinel
@@ -53,6 +53,9 @@ train:
 
 eval:
 	$(PY) -m eval.evaluate
+
+mimic:
+	$(PY) scripts/prepare_mimic_iv_ed.py
 
 demo:
 	$(PY) scripts/run_demo.py

@@ -6,7 +6,8 @@
   --color-paper: #f4f7fb;
   --color-card: #ffffff;
   --color-line: #d5deea;
-  --color-navy: #16324f;
+  --color-navy: #0d2137;
+  --color-navy-2: #16324f;
   --color-action: #1d4e89;
   --color-teal: #1d4e89;
   --color-alert: #8c2f2f;
@@ -18,7 +19,7 @@ body {
   margin: 0;
   background: var(--color-paper);
   color: var(--color-ink);
-  font-family: var(--font-sans);
+  font-family: "Segoe UI", "Nirmala UI", "Noto Sans Telugu", "Noto Sans Devanagari", sans-serif;
 }
 
 :focus-visible {
@@ -39,11 +40,323 @@ body {
   min-height: 2.15rem;
 }
 
-.panel {
-  border: 1px solid var(--color-line);
-  border-radius: 0.5rem;
+.panel,
+.card {
+  border: 1px solid #e6edf5;
+  border-radius: 1rem;
   background: white;
+  padding: 1rem 1.1rem;
+  box-shadow: 0 8px 24px rgba(16, 32, 51, 0.04);
+}
+
+.app-shell {
+  display: grid;
+  min-height: 100vh;
+  background: #eef3f8;
+}
+
+@media (min-width: 1024px) {
+  .app-shell {
+    grid-template-columns: 16.25rem minmax(0, 1fr);
+  }
+}
+
+.sidebar {
+  background: #0d2137;
+  color: #e8f0f8;
+}
+
+.brand-mark {
+  display: grid;
+  width: 2.4rem;
+  height: 2.4rem;
+  place-items: center;
+  border-radius: 0.8rem;
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.heart {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.nav-kicker {
+  padding: 0.2rem 1.15rem 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8eabc4;
+}
+
+.nav-btn {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.7rem;
+  border-radius: 0.75rem;
+  padding: 0.62rem 0.75rem;
+  color: #d5e2ef;
+  text-align: left;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.nav-btn[aria-current="page"] {
+  background: #1a3d63;
+  color: white;
+}
+
+.nav-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: none;
+}
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid #e6edf5;
+  background: white;
+  padding: 0.85rem 1.25rem;
+}
+
+.workspace {
+  padding: 1.1rem 1.25rem 2rem;
+}
+
+.hero {
+  display: grid;
+  gap: 1rem;
+  border-radius: 1.15rem;
+  background: linear-gradient(120deg, #0b1c30 0%, #14385c 55%, #0e2a40 100%);
+  color: white;
+  padding: 1.25rem;
+}
+
+@media (min-width: 1100px) {
+  .hero {
+    grid-template-columns: 1.15fr 1.4fr 0.85fr;
+  }
+}
+
+.hero-kicker {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #9fd0c8;
+}
+
+.hero-id {
+  font-size: clamp(2rem, 4vw, 3.4rem);
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.token-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+
+.token-grid button {
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 0.7rem;
+  background: rgb(255 255 255 / 8%);
+  color: white;
+  padding: 0.45rem 0.6rem;
+}
+
+.stat-grid {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+
+.proof-band {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+}
+
+.workflow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.workflow-step {
+  border: 1px solid #d5deea;
+  border-radius: 999px;
+  background: white;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.kpi {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+}
+
+.kpi-icon {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: none;
+  place-items: center;
+  border-radius: 999px;
+}
+
+.kpi-icon svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.kpi-blue { background: #e7f0fb; color: #1d4e89; }
+.kpi-amber { background: #f8f1df; color: #8a5a00; }
+.kpi-red { background: #f8e8e8; color: #8c2f2f; }
+.kpi-green { background: #e7f3ec; color: #1d4a32; }
+
+.doctor-board {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+
+.handoff {
+  border: 1px solid #e4d7c8;
+  border-radius: 1rem;
+  background: #fffdf9;
   padding: 0.9rem 1rem;
+}
+
+.doctor-banner {
+  border: 1px solid #e4d7c8;
+  border-radius: 1rem;
+  background: linear-gradient(120deg, #fff8f1, #fff);
+  padding: 1rem 1.1rem;
+}
+
+.metric-tile {
+  border-radius: 0.8rem;
+  background: #f4f7fb;
+  padding: 0.7rem 0.8rem;
+}
+
+.metric-tile strong {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 1.35rem;
+}
+
+.stat-value {
+  font-size: 1.7rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.bar-track {
+  height: 0.55rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e7eef6;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: #1d4e89;
+}
+
+.donut {
+  width: 9.5rem;
+  height: 9.5rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+}
+
+.donut span {
+  display: grid;
+  width: 5.6rem;
+  height: 5.6rem;
+  place-items: center;
+  border-radius: inherit;
+  background: white;
+  text-align: center;
+  font-weight: 700;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: white;
+  font-size: 0.9rem;
+  box-shadow: 0 8px 24px rgba(16, 32, 51, 0.04);
+}
+
+.data-table th {
+  background: #f7fafc;
+  color: #5d6d82;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.data-table th,
+.data-table td {
+  border-bottom: 1px solid #e8eef5;
+  padding: 0.7rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.pill-alert { background: #f8e8e8; color: #8c2f2f; }
+.pill-ok { background: #e7f3ec; color: #1d4a32; }
+.pill-amber { background: #f8f1df; color: #8a5a00; }
+.pill-navy { background: #e7eef8; color: #1d4e89; }
+
+.triage-workspace {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .triage-workspace {
+    grid-template-columns: 24rem minmax(0, 1fr) 18rem;
+  }
+}
+
+.status-note {
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.status-note.is-alert {
+  color: var(--color-alert);
 }
 
 .btn-primary,
@@ -52,8 +365,9 @@ body {
   min-height: 2.5rem;
   border-radius: 0.375rem;
   padding: 0.35rem 0.8rem;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 600;
+  line-height: 1.2;
 }
 
 .btn-primary {
@@ -114,4 +428,328 @@ body {
   margin: 0;
   overflow: visible;
   clip: auto;
+}
+
+/* Nurse station surfaces taken from the local wIoT portal (tokens + cards). */
+.wiot {
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f1f5f9;
+  --color-border: #e2e8f0;
+  --color-text: #0f172a;
+  --color-text-muted: #475569;
+  --color-text-subtle: #94a3b8;
+  --color-brand: #2563eb;
+  --color-brand-hover: #1d4ed8;
+  --color-success: #10b981;
+  --color-success-soft: #ecfdf5;
+  --color-warning: #ca8a04;
+  --color-warning-soft: #fef9c3;
+  --color-danger: #b91c1c;
+  --color-danger-soft: #fef2f2;
+  --color-info: #2563eb;
+  --color-info-soft: #eff6ff;
+  --font-sans: "Inter", "Nirmala UI", "Noto Sans Telugu", "Noto Sans Devanagari", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Plus Jakarta Sans", "Inter", "Nirmala UI", sans-serif;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px rgba(11, 24, 48, 0.05);
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+
+.wiot .page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.wiot .page-header h2 {
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 2.4vw, 1.85rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.wiot .page-header__desc {
+  margin-top: var(--space-2);
+  max-width: 40rem;
+  color: var(--color-text-muted);
+}
+
+.wiot .page-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.wiot .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  padding: 0.5rem 1rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.wiot .btn--primary {
+  background: var(--color-brand);
+  color: #fff;
+}
+
+.wiot .btn--primary:hover {
+  background: var(--color-brand-hover);
+}
+
+.wiot .btn--secondary {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.wiot .btn--ghost {
+  background: transparent;
+  color: var(--color-brand);
+  padding-inline: 0.4rem;
+}
+
+.wiot .btn--sm {
+  padding: 0.4rem 0.85rem;
+  font-size: 0.82rem;
+}
+
+.wiot .stat-grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: var(--space-5);
+}
+
+.wiot .stat-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-4);
+}
+
+.wiot .stat-card__label {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.wiot .stat-card__value {
+  margin-top: var(--space-2);
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 3vw, 1.9rem);
+  font-weight: 700;
+}
+
+.wiot .stat-card__hint {
+  margin-top: var(--space-1);
+  color: var(--color-text-subtle);
+  font-size: 0.82rem;
+}
+
+.wiot .panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-4);
+}
+
+.wiot .panel__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.wiot .panel__title {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.wiot .panel__subtitle {
+  margin-top: 0.15rem;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+}
+
+.wiot .split-grid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.wiot .table-wrap {
+  overflow-x: auto;
+}
+
+.wiot .table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 640px;
+}
+
+.wiot .table th,
+.wiot .table td {
+  padding: 0.85rem 0.7rem;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+.wiot .table th {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  font-weight: 700;
+}
+
+.wiot .table tbody tr:hover {
+  background: var(--color-surface-muted);
+}
+
+.wiot .table__link {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.wiot .table__meta {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.wiot .badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.wiot .badge--critical {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.wiot .badge--warning {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+
+.wiot .badge--info {
+  background: var(--color-info-soft);
+  color: var(--color-info);
+}
+
+.wiot .vital-grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: var(--space-5);
+}
+
+.wiot button.table__link {
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+.wiot .vital-tile {
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+}
+
+.wiot .vital-tile__label {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.wiot .vital-tile__value {
+  margin-top: 0.25rem;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.wiot .alert-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.wiot .alert-item {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  text-align: left;
+  color: inherit;
+}
+
+.wiot .alert-item__top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wiot .alert-item__title {
+  font-weight: 700;
+}
+
+.wiot .alert-item__message {
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
+}
+
+.wiot .alert-item__meta {
+  color: var(--color-text-subtle);
+  font-size: 0.82rem;
+}
+
+@media (min-width: 700px) {
+  .wiot .stat-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1100px) {
+  .wiot .split-grid {
+    grid-template-columns: 1.4fr 0.9fr;
+    align-items: start;
+  }
+
+  .wiot .vital-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }

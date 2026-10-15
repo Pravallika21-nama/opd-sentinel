@@ -30,6 +30,8 @@ def binary_report(
     stats = binary_cost(y_emergency, predicted_urgent.astype(int), under=under, over=over)
     recall = stats["emergency_recall"]
     stats["emergency_recall"] = rounded(float(recall) if recall is not None else None)
+    precision = stats.get("emergency_precision")
+    stats["emergency_precision"] = rounded(float(precision) if precision is not None else None)
     stats["cost"] = rounded(float(stats["cost"]), 1)
     return stats
 

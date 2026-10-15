@@ -46,6 +46,7 @@ class TriageResponse(TriageDecision):
     """Phase 6 decision plus the stored id and measured latency."""
 
     case_id: str
+    opd_number: str = ""
     latency_ms: float
 
 
@@ -62,6 +63,7 @@ class QueueItem(BaseModel):
     """One waiting case, sorted for the nurse."""
 
     id: str
+    opd_number: str = ""
     arrival_time: str
     wait_seconds: float
     triage_level: int | None
@@ -77,3 +79,8 @@ class QueueItem(BaseModel):
     reassessment: Literal["none", "requested"] = "none"
     position_reason: str = ""
     rank: int = 0
+    systolic_bp: float | None = None
+    diastolic_bp: float | None = None
+    pulse: float | None = None
+    temperature_c: float | None = None
+    spo2: float | None = None

@@ -14,11 +14,19 @@ type Review = {
 
 type CaseFile = {
   case_id: string;
+  opd_number?: string;
   arrival_time: string;
   illustrative: boolean;
   input: Record<string, unknown>;
   decision: TriageResult | null;
   reviews: Review[];
+};
+
+type AuditRow = {
+  id: number;
+  created_at: string;
+  event: string;
+  payload: { reason?: string; action?: string };
 };
 
 export function RecordsPage({
@@ -33,6 +41,11 @@ export function RecordsPage({
   const detail = useQuery({
     queryKey: ["case", caseId],
     queryFn: () => apiGet<CaseFile>(`/queue/${caseId}`),
+    enabled: Boolean(caseId),
+  });
+  const audit = useQuery({
+    queryKey: ["audit", caseId],
+    queryFn: () => apiGet<AuditRow[]>(`/audit?case_id=${caseId}`),
     enabled: Boolean(caseId),
   });
   const selected = detail.data;
@@ -50,7 +63,7 @@ export function RecordsPage({
                 className={`w-full rounded-md px-2 py-2 text-left text-sm ${item.id === caseId ? "bg-action text-white" : "hover:bg-paper"}`}
                 onClick={() => onOpen(item.id)}
               >
-                <span className="font-semibold">{item.id}</span>
+                <span className="font-semibold">{item.opd_number || item.id}</span>
                 <span className="block">Level {item.triage_level ?? "none"} · {item.review_status}</span>
               </button>
             </li>
@@ -64,9 +77,10 @@ export function RecordsPage({
         {selected ? (
           <div className="flex flex-col gap-4">
             <header className="panel">
-              <h2 className="text-lg font-semibold">{selected.case_id}</h2>
+              <h2 className="text-lg font-semibold">{selected.opd_number || "OPD number pending"}</h2>
+              <p className="text-sm">Internal encounter ID {selected.case_id}</p>
               <p className="text-sm">Arrival {selected.arrival_time}</p>
-              {selected.illustrative ? <p className="text-sm font-semibold">Example, not a real clinical outcome.</p> : null}
+              {selected.illustrative ? <p className="text-sm font-semibold">Example, not a real patient. Not a real clinical outcome.</p> : null}
             </header>
             <section className="panel">
               <h3 className="font-semibold">Intake as entered</h3>
@@ -95,6 +109,20 @@ export function RecordsPage({
                 {selected.reviews.map((review) => (
                   <li key={review.created_at} className="rounded-md border border-line px-3 py-2">
                     {review.action} level {review.triage_level ?? "unchanged"} at {review.created_at}. {review.reason}
+                  </li>
+                ))}
+              </ul>
+            </section>
+            <section className="panel">
+              <h3 className="font-semibold">Audit history</h3>
+              {audit.isPending ? <p role="status">{t.loading}</p> : null}
+              {audit.isError ? <p role="alert">{audit.error.message}</p> : null}
+              {(audit.data ?? []).length === 0 && !audit.isPending ? <p className="text-sm">No audit rows for this encounter.</p> : null}
+              <ul className="mt-2 flex flex-col gap-2 text-sm">
+                {(audit.data ?? []).map((row) => (
+                  <li key={row.id}>
+                    {row.created_at}: {row.event}
+                    {row.payload.reason ? `. ${row.payload.reason}` : ""}
                   </li>
                 ))}
               </ul>

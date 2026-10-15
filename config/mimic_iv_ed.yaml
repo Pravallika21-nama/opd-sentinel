@@ -1,0 +1,47 @@
+# Public MIMIC-IV-ED contract used only after the local files are present.
+# Source: https://physionet.org/content/mimic-iv-ed/
+# The prepare command does not download this dataset.
+
+source_url: https://physionet.org/content/mimic-iv-ed/
+licence: >-
+  PhysioNet Credentialed Health Data License. Credentialed access is required.
+  Raw files stay outside git and must not be redistributed.
+
+# Published dictionary: triage temperature is Fahrenheit. This project does not convert it.
+temperature_unit_documented: Fahrenheit
+triage_scale_note: >-
+  The published triage.acuity field is an Emergency Severity Index style score
+  where 1 is the most urgent. OPD Sentinel also uses 1 as most urgent.
+  Acuity is not copied onto the live triage_level label. MIMIC-IV-ED has no
+  OPD Sentinel department label and no binary emergency column.
+
+tables:
+  triage:
+    file: triage.csv
+    required:
+      - stay_id
+      - temperature
+      - heartrate
+      - o2sat
+      - sbp
+      - dbp
+      - acuity
+      - chiefcomplaint
+  edstays:
+    file: edstays.csv
+    required:
+      - stay_id
+      - intime
+      - gender
+
+field_map:
+  sbp: systolic_bp
+  dbp: diastolic_bp
+  heartrate: pulse
+  o2sat: spo2
+  chiefcomplaint: complaint
+  temperature: temperature_f
+  acuity: mimic_acuity
+  gender: sex
+  intime: arrival_time
+  stay_id: source_stay_id

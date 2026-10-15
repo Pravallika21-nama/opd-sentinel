@@ -48,7 +48,28 @@ def test_implausible_vitals_are_accepted(client: TestClient) -> None:
     assert statuses["systolic_bp"] == "implausible"
     assert statuses["temperature_c"] == "conflicting"
     assert statuses["spo2"] == "implausible"
+    assert body["opd_number"].startswith("OPD-")
+    again = client.get(f"/queue/{body['case_id']}")
+    assert again.status_code == 200
+    assert again.json()["opd_number"] == body["opd_number"]
+    second = client.post(
+        "/triage",
+        json={
+            "age": 50,
+            "sex": "male",
+            "systolic_bp": 120,
+            "diastolic_bp": 80,
+            "pulse": 76,
+            "temperature_c": 36.8,
+            "spo2": 98,
+            "complaint": "halka sardi",
+        },
+    )
+    assert second.status_code == 200
+    assert second.json()["opd_number"] != body["opd_number"]
+    assert second.json()["case_id"] != body["case_id"]
     assert "latency_ms" in body
+    assert body["case_id"].startswith("case-")
 
 
 def test_queue_review_and_audit(client: TestClient) -> None:

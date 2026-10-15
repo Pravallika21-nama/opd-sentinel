@@ -4,9 +4,11 @@ import { apiGet, type QueueItem } from "../api/client";
 import { levelName, useLocale } from "../lib/i18n";
 
 function waited(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
-  const rest = Math.round(seconds % 60);
-  return `${minutes} min ${rest} s`;
+  const total = Math.max(0, Math.round(seconds));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  if (hours > 0) return `${hours} h ${minutes} m`;
+  return `${minutes} min ${total % 60} s`;
 }
 
 export function QueuePage({ onOpen }: { onOpen: (id: string) => void }) {
@@ -38,7 +40,8 @@ export function QueuePage({ onOpen }: { onOpen: (id: string) => void }) {
   }));
 
   return (
-    <section>
+    <section className="flex flex-col gap-4">
+      <div className="card">
       <h1 className="text-xl font-semibold">Priority Queue</h1>
       <p className="mt-1 max-w-3xl text-sm">
         Higher urgency is ahead of ordinary arrival order. Within the same level, earlier arrival is ahead.
@@ -94,13 +97,14 @@ export function QueuePage({ onOpen }: { onOpen: (id: string) => void }) {
           <input className="field mt-1 w-full" inputMode="numeric" value={minWait} onChange={(event) => setMinWait(event.target.value)} />
         </label>
       </div>
+      </div>
       {queue.isPending ? <p role="status">{t.loading}</p> : null}
       {queue.isError ? <p role="alert">{queue.error.message}</p> : null}
       <div className="mt-3 overflow-x-auto">
-        <table className="w-full border-collapse text-left text-sm">
+        <table className="data-table">
           <thead>
             <tr>
-              {["#", t.encounter, "Arrival", t.waiting, t.level, t.department, "Flags", "Data", t.reviewStatus, "Reassessment"].map((heading) => (
+              {["#", "OPD number", t.level, t.department, t.waiting, "Flags", t.reviewStatus, "Review"].map((heading) => (
                 <th key={heading} className="border-b border-line px-2 py-2">{heading}</th>
               ))}
             </tr>
@@ -110,23 +114,25 @@ export function QueuePage({ onOpen }: { onOpen: (id: string) => void }) {
               <tr key={item.id} className="align-top">
                 <td className="border-b border-line px-2 py-2">{item.rank}</td>
                 <td className="border-b border-line px-2 py-2">
-                  <button type="button" className="font-semibold text-action underline" onClick={() => onOpen(item.id)}>
-                    {item.id}
-                  </button>
-                  {item.illustrative ? <p className="text-xs">Example</p> : null}
+                  <p className="font-semibold">{item.opd_number || "Pending"}</p>
+                  <p className="text-xs">{item.id}</p>
+                  {item.illustrative ? <p className="text-xs">Example, not a real patient.</p> : null}
                 </td>
-                <td className="border-b border-line px-2 py-2">{item.arrival_time.slice(11, 19)}</td>
-                <td className="border-b border-line px-2 py-2">{waited(item.wait_seconds)}</td>
                 <td className="border-b border-line px-2 py-2">
-                  {item.triage_level ?? "None"}
-                  {item.abstain ? " · abstain" : ""}
+                  {item.triage_level === null ? "No level" : `${item.triage_level} ${levelName[locale][item.triage_level]}`}
+                  {item.abstain ? <p className="font-semibold text-alert">Cannot assess, send to nurse now</p> : null}
                 </td>
                 <td className="border-b border-line px-2 py-2">{item.department ?? "Pending"}</td>
-                <td className="border-b border-line px-2 py-2">{item.red_flag ? "Red flag" : "None"}</td>
-                <td className="border-b border-line px-2 py-2">{item.data_quality === "warning" ? "Check vitals" : "ok"}</td>
+                <td className="border-b border-line px-2 py-2">{waited(item.wait_seconds)}</td>
+                <td className="border-b border-line px-2 py-2">
+                  {item.red_flag ? "Red flag" : "None"}
+                  {item.data_quality === "warning" ? <p>Check vitals</p> : null}
+                </td>
                 <td className="border-b border-line px-2 py-2">{item.review_status}</td>
                 <td className="border-b border-line px-2 py-2">
-                  {item.reassessment === "requested" ? "Requested" : "None"}
+                  <button type="button" className="btn-secondary" onClick={() => onOpen(item.id)}>
+                    View
+                  </button>
                   <p className="mt-1 max-w-xs text-xs">{item.position_reason}</p>
                 </td>
               </tr>

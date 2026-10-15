@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 from fastapi import APIRouter, Query
@@ -10,6 +11,7 @@ from fastapi.responses import JSONResponse
 
 from app.schemas import BatchIntakeRequest, IntakeRequest, QueueItem, ReviewRequest, TriageResponse
 from app.services.store import get_case, list_audit, list_queue, review_case, triage_and_store
+from app.services.summary import station_summary
 from core.config_loader import (
     load_demo_config,
     load_red_flag_config,
@@ -51,6 +53,14 @@ def triage_batch(body: BatchIntakeRequest) -> list[TriageResponse] | JSONRespons
 def queue() -> list[QueueItem]:
     """Waiting cases, emergencies and abstentions first."""
     return list_queue()
+
+
+@router.get("/station/summary")
+def station() -> dict[str, Any]:
+    """Four nurse-station counts. Each value includes the rule that produced it."""
+    from datetime import UTC, datetime
+
+    return station_summary(list_queue(), today=datetime.now(UTC).date())
 
 
 @router.get("/queue/{case_id}")
@@ -133,6 +143,14 @@ def system_status() -> dict[str, Any]:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         data_source = str(manifest.get("source_kind", "Pending"))
     report = root / settings["reports"]["json"]
+    mimic_manifest = root / "data" / "processed" / "mimic_iv_ed_manifest.json"
+    mimic_dir = os.environ.get("OPD_MIMIC_ED_DIR", "").strip()
+    if mimic_manifest.is_file():
+        mimic_status = "Inspected locally. Held-out evaluation is Pending."
+    elif mimic_dir:
+        mimic_status = "Path is set. The prepare command has not written a manifest."
+    else:
+        mimic_status = "Not installed. Real-data evaluation is Pending."
     return {
         "product": "OPD Sentinel",
         "classical_available": classical_available(),
@@ -144,6 +162,8 @@ def system_status() -> dict[str, Any]:
         "rules_banner": "PLACEHOLDER — CLINICAL REVIEW REQUIRED",
         "data_source": data_source,
         "evaluation_report": "present" if report.is_file() else "Pending",
+        "mimic_iv_ed": mimic_status,
+        "mimic_iv_ed_source": "https://physionet.org/content/mimic-iv-ed/",
         "audit": (
             "Append-only within the application's database permissions. "
             "Not cryptographically immutable."

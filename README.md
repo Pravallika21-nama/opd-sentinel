@@ -2,7 +2,9 @@
 
 Decision support for nurse triage in an overloaded government hospital outpatient department. The tool suggests a triage level (1 is most urgent), a department, and any red-flag phrases it matched. A nurse confirms or overrides every case. It does not diagnose and it does not replace a doctor.
 
-Classical ML is the live path. Quantum ML is an experiment on the PennyLane `default.qubit` simulator. No speedup and no quantum advantage are claimed. The Safety-Rule Layer can only keep or raise urgency. Reported numbers come from `reports/` after `make eval`. Until that file exists, the Evaluation page shows **Pending**.
+Classical ML is the live path. Quantum ML is an experiment on the PennyLane `default.qubit` simulator. No speedup and no quantum advantage are claimed. The Safety-Rule Layer can only keep or raise urgency. Reported numbers come from `reports/` after `make eval`. Until that file exists, the research page shows **Pending evaluation**.
+
+MIMIC-IV-ED is the intended external source: https://physionet.org/content/mimic-iv-ed/. Access is credentialed. Set `OPD_MIMIC_ED_DIR` to a local copy and run `python scripts/prepare_mimic_iv_ed.py`. That command checks the published column names and writes a manifest. It does not download the dataset, convert Fahrenheit, or create an emergency label. Real-data evaluation stays pending until that evaluation is actually run.
 
 ## Architecture
 
