@@ -25,8 +25,8 @@ export function DoctorReviewPage({ onOpen }: { onOpen: (id: string) => void }) {
   return (
     <section className="flex flex-col gap-4">
       <header className="doctor-banner">
-        <p className="text-xs font-semibold uppercase tracking-wide text-amber">After Nurse Review</p>
-        <h2 className="mt-1 text-2xl font-semibold">{t.doctor}</h2>
+        <p className="topbar-kicker">After Nurse Review</p>
+        <h2 className="mt-1 text-2xl font-bold tracking-tight">Handed over by the nurse</h2>
         <p className="mt-1 max-w-3xl text-sm">
           Only cases a nurse has confirmed, overridden, or escalated. This board does not take new intakes
           and does not change urgency.

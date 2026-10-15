@@ -56,7 +56,7 @@ export function RulesPage() {
   return (
     <section className="flex flex-col gap-4">
       <header>
-        <h1 className="text-xl font-semibold">Rules & Safety</h1>
+        <h2 className="section-title">Rules that can only raise urgency</h2>
         <p className="mt-2 max-w-3xl rounded-md border border-amber bg-amber/10 px-3 py-2 text-sm font-semibold">
           {t.placeholderBanner}
         </p>

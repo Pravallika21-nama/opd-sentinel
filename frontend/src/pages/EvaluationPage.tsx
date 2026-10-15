@@ -8,6 +8,8 @@ type Report = {
   evaluation_kind?: string;
   data_source?: string;
   disclaimer?: string;
+  generated_at?: string;
+  cost_definition?: { undertriage_emergency_weight?: number; overtriage_weight?: number };
   sections?: Record<string, Section>;
 };
 type System = {
@@ -20,29 +22,77 @@ type System = {
   mimic_iv_ed_source?: string;
 };
 
-function shown(section: Section | undefined, key: string): string {
-  if (!section || section.status === "Pending") return "Pending evaluation.";
+const PENDING = "Pending evaluation.";
+
+function num(section: Section | undefined, key: string): number | null {
+  if (!section || section.status === "Pending") return null;
   const value = section[key];
-  if (value === null || value === undefined || value === "") return "Pending evaluation.";
-  if (typeof value === "object") return "Pending evaluation.";
-  return String(value);
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function nested(section: Section | undefined, group: string, key: string): string {
-  const value = section?.[group];
-  if (!value || typeof value !== "object" || Array.isArray(value)) return "Pending evaluation.";
-  const inner = (value as Section)[key];
-  if (inner === null || inner === undefined || inner === "") return "Pending evaluation.";
-  if (typeof inner === "object") return "Pending evaluation.";
-  return String(inner);
+function nestedNum(section: Section | undefined, group: string, key: string): number | null {
+  const block = section?.[group];
+  if (!block || typeof block !== "object" || Array.isArray(block)) return null;
+  const value = (block as Section)[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function pct(value: number | null): string {
+  return value === null ? PENDING : `${Math.round(value * 1000) / 10}%`;
+}
+
+function plain(value: number | null, suffix = ""): string {
+  return value === null ? PENDING : `${value}${suffix}`;
+}
+
+function Verdict({
+  title,
+  tag,
+  experiment,
+  section,
+  note,
+}: {
+  title: string;
+  tag: string;
+  experiment: boolean;
+  section: Section | undefined;
+  note: string;
+}) {
+  const caught = num(section, "caught_emergencies");
+  const total = num(section, "n_emergencies");
+  const missed = num(section, "missed_emergencies");
+  const falseAlerts = num(section, "false_alerts");
+  const scored = num(section, "n");
+  const nonEmergencies = scored !== null && total !== null ? scored - total : null;
+  const share = caught !== null && total ? Math.min(100, (caught / total) * 100) : 0;
+
   return (
-    <div className="metric-tile">
-      <dt className="text-xs font-semibold text-slate-500">{label}</dt>
-      <dd><strong>{value}</strong></dd>
-    </div>
+    <article className={`panel verdict ${experiment ? "is-experiment" : ""}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="section-title">{title}</h3>
+        <span className={`tag ${experiment ? "tag-slate" : "tag-sky"}`}>{tag}</span>
+      </div>
+      <p className="mt-3 text-sm font-semibold text-slate-600">Emergencies caught</p>
+      <p className="verdict-big">{caught !== null && total !== null ? `${caught} of ${total}` : PENDING}</p>
+      <div className="meter" aria-hidden="true">
+        <span style={{ width: `${share}%` }} />
+      </div>
+      <dl className="fact-grid">
+        <div className="fact">
+          <dt>Emergencies missed</dt>
+          <dd>{plain(missed)}</dd>
+        </div>
+        <div className="fact">
+          <dt>False alarms</dt>
+          <dd>
+            {falseAlerts !== null && nonEmergencies !== null
+              ? `${falseAlerts} of ${nonEmergencies}`
+              : plain(falseAlerts)}
+          </dd>
+        </div>
+      </dl>
+      <p className="mt-3 text-sm text-slate-600">{note}</p>
+    </article>
   );
 }
 
@@ -53,75 +103,302 @@ export function EvaluationPage() {
   if (report.isPending || system.isPending) return <p role="status">{t.loading}</p>;
   if (report.isError) return <p role="alert">{report.error.message}</p>;
   if (system.isError) return <p role="alert">{system.error.message}</p>;
+
   const data = report.data;
   const classical = data.sections?.classical;
   const quantum = data.sections?.quantum;
+  const pipeline = data.sections?.pipeline;
   const runtime = data.sections?.runtime;
-  const synthetic = (data.data_source ?? "").toLowerCase().includes("synthetic")
-    || (data.evaluation_kind ?? "").toLowerCase().includes("proxy");
+  const synthetic = (data.data_source ?? "").toLowerCase().includes("synthetic");
+  const proxy = (data.evaluation_kind ?? "").toLowerCase().includes("proxy");
+
+  const scored = num(classical, "n");
+  const emergencies = num(classical, "n_emergencies");
+  const missWeight = data.cost_definition?.undertriage_emergency_weight ?? null;
+  const alarmWeight = data.cost_definition?.overtriage_weight ?? null;
+
+  const cMissed = num(classical, "missed_emergencies");
+  const qMissed = num(quantum, "missed_emergencies");
+  const cAlarms = num(classical, "false_alerts");
+  const pAlarms = num(pipeline, "false_alerts");
+  const abstained = num(pipeline, "n_abstain");
+
+  const meaning: string[] = [];
+  if (cMissed !== null && qMissed !== null && emergencies !== null) {
+    if (cMissed < qMissed) {
+      meaning.push(
+        `On the same ${emergencies} emergencies, Classical ML missed ${cMissed} and Quantum ML missed ${qMissed}. That is why Classical ML gives the live suggestion and Quantum ML stays an experiment.`,
+      );
+    } else if (cMissed === qMissed) {
+      meaning.push(
+        `Both models missed ${cMissed} of ${emergencies} emergencies on this test. Classical ML stays the live path because Quantum ML is still an experiment.`,
+      );
+    } else {
+      meaning.push(
+        `Quantum ML missed fewer emergencies on this test (${qMissed} against ${cMissed}). One synthetic test does not change the live path. The result would need repeating on real data first.`,
+      );
+    }
+  }
+  meaning.push(
+    "Quantum ML can only raise urgency. If it misses an emergency, the Classical ML suggestion and the safety rules still apply.",
+  );
+  if (pAlarms !== null && cAlarms !== null && pAlarms > cAlarms) {
+    meaning.push(
+      `The full system raises ${pAlarms - cAlarms} more false alarms than Classical ML alone, because the safety rules escalate when in doubt. A false alarm costs nurse time. A missed emergency is treated as far worse.`,
+    );
+  }
+
+  const rows: { label: string; help: string; values: [string, string, string] }[] = [
+    {
+      label: "Share of emergencies caught",
+      help: "Also called recall or sensitivity. Higher is better.",
+      values: [
+        pct(num(classical, "emergency_recall")),
+        pct(num(quantum, "emergency_recall")),
+        pct(num(pipeline, "emergency_recall")),
+      ],
+    },
+    {
+      label: "Emergencies missed",
+      help: "True emergencies given a non-urgent level. The most important number. Lower is better.",
+      values: [plain(cMissed), plain(qMissed), plain(num(pipeline, "missed_emergencies"))],
+    },
+    {
+      label: "False alarms",
+      help: "Non-emergencies flagged as urgent. They cost nurse time, not patient safety.",
+      values: [plain(cAlarms), plain(num(quantum, "false_alerts")), plain(pAlarms)],
+    },
+    {
+      label: "Precision",
+      help: "Of the cases flagged urgent, the share that were true emergencies.",
+      values: [
+        pct(num(classical, "emergency_precision")),
+        pct(num(quantum, "emergency_precision")),
+        pct(num(pipeline, "emergency_precision")),
+      ],
+    },
+    {
+      label: "Triage level matched",
+      help: "Share of cases where the suggested level 1 to 5 matched the test label.",
+      values: [
+        pct(num(classical, "triage_level_accuracy")),
+        pct(num(quantum, "triage_level_accuracy")),
+        pct(num(pipeline, "triage_level_accuracy")),
+      ],
+    },
+    {
+      label: "Department matched",
+      help: "Share of cases sent to the same department as the test label.",
+      values: [
+        pct(num(classical, "department_accuracy")),
+        pct(num(quantum, "department_accuracy")),
+        pct(num(pipeline, "department_accuracy")),
+      ],
+    },
+    {
+      label: "Weighted cost",
+      help:
+        missWeight !== null && alarmWeight !== null
+          ? `A missed emergency counts ${missWeight} points and a false alarm ${alarmWeight}. Lower is better.`
+          : "Missed emergencies weigh more than false alarms. Lower is better.",
+      values: [plain(num(classical, "cost")), plain(num(quantum, "cost")), plain(num(pipeline, "cost"))],
+    },
+    {
+      label: "Median time per case",
+      help: "Measured on this computer. Not a hospital speed claim.",
+      values: [
+        plain(nestedNum(runtime, "classical", "p50_ms"), " ms"),
+        plain(nestedNum(runtime, "quantum", "p50_ms"), " ms"),
+        plain(nestedNum(runtime, "pipeline", "p50_ms"), " ms"),
+      ],
+    },
+  ];
 
   return (
-    <section className="flex flex-col gap-4">
-      <article className="card">
-        <h2 className="text-lg font-semibold">Quantum & AI Research</h2>
-        <p className="mt-1 text-sm">
-          Figures come only from reports/results.json and the system status. A missing figure is
-          Pending evaluation. This is not clinical evidence and not a claim of quantum advantage.
+    <section className="flex flex-col gap-5">
+      <article className="panel">
+        <div className="flex flex-wrap gap-2">
+          {synthetic ? <span className="tag tag-amber">Synthetic test records</span> : null}
+          {proxy ? <span className="tag tag-amber">Local proxy evaluation</span> : null}
+          <span className="tag tag-slate">Not clinical validation</span>
+        </div>
+        <h2 className="mt-3 text-xl font-bold tracking-tight">
+          {scored !== null && emergencies !== null
+            ? `Both models were tested on ${scored} records they never saw in training, including ${emergencies} true emergencies.`
+            : "No evaluation has been run yet. Figures show Pending evaluation."}
+        </h2>
+        <p className="mt-2 max-w-4xl text-slate-600">
+          OPD Sentinel has two models. <strong>Classical ML</strong> gives the suggestion a nurse sees.{" "}
+          <strong>Quantum ML</strong> is a research experiment that runs on a quantum simulator, not quantum hardware.
+          The key question is how many true emergencies each one missed, because missing an emergency
+          {missWeight !== null && alarmWeight !== null
+            ? ` is treated as ${missWeight / alarmWeight} times worse than a false alarm.`
+            : " is treated as far worse than a false alarm."}
         </p>
-        {synthetic ? (
-          <p className="mt-2 text-sm font-semibold">
-            The stored evaluation is a synthetic or proxy run. It is not MIMIC-IV-ED validation.
-          </p>
-        ) : null}
-        <p className="mt-2 text-sm">{data.disclaimer ?? "Pending evaluation."}</p>
       </article>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <article className="card">
-          <h3 className="font-semibold">Classical ML</h3>
-          <p className="text-sm">Live recommendation path. Status: {system.data.classical_available ? "artefact present" : "artefact unavailable"}.</p>
-          <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
-            <Metric label="Emergency recall" value={shown(classical, "emergency_recall")} />
-            <Metric label="Emergency precision" value={shown(classical, "emergency_precision")} />
-            <Metric label="Missed emergencies" value={shown(classical, "missed_emergencies")} />
-            <Metric label="False alerts" value={shown(classical, "false_alerts")} />
-            <Metric label="Records scored (n)" value={shown(classical, "n")} />
-            <Metric label="True negatives" value={shown(classical, "true_negatives")} />
+
+      <div className="verdict-grid">
+        <Verdict
+          title="Classical ML"
+          tag="Live suggestion"
+          experiment={false}
+          section={classical}
+          note={
+            system.data.classical_available
+              ? "Gives the suggestion shown on Live Triage. A nurse still confirms every case."
+              : "The model file is not available, so cases are sent to the nurse."
+          }
+        />
+        <Verdict
+          title="Quantum ML"
+          tag="Experiment only"
+          experiment
+          section={quantum}
+          note={
+            system.data.quantum_available
+              ? system.data.quantum_role ?? "Simulator experiment. It cannot lower urgency."
+              : "Quantum ML unavailable. Cases continue on Classical ML."
+          }
+        />
+      </div>
+
+      <article className="callout">
+        <h3 className="section-title">What this means</h3>
+        <ul className="mt-2 flex list-disc flex-col gap-1.5 pl-5 text-slate-700">
+          {meaning.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      </article>
+
+      <article className="panel">
+        <h3 className="section-title">The full system: safety rules plus models</h3>
+        <p className="section-sub">This is what a nurse actually receives.</p>
+        <dl className="fact-grid">
+          <div className="fact">
+            <dt>Emergencies caught</dt>
+            <dd>
+              {num(pipeline, "caught_emergencies") !== null && num(pipeline, "n_emergencies") !== null
+                ? `${num(pipeline, "caught_emergencies")} of ${num(pipeline, "n_emergencies")}`
+                : PENDING}
+            </dd>
+          </div>
+          <div className="fact">
+            <dt>Emergencies missed</dt>
+            <dd>{plain(num(pipeline, "missed_emergencies"))}</dd>
+          </div>
+          <div className="fact">
+            <dt>False alarms</dt>
+            <dd>{plain(pAlarms)}</dd>
+          </div>
+          <div className="fact">
+            <dt>Sent to a nurse without a guess</dt>
+            <dd>
+              {abstained !== null && num(pipeline, "n") !== null
+                ? `${abstained} of ${num(pipeline, "n")}`
+                : PENDING}
+            </dd>
+          </div>
+        </dl>
+      </article>
+
+      <article className="panel">
+        <h3 className="section-title">Side-by-side numbers</h3>
+        <p className="section-sub">Every figure is read from reports/results.json. Missing figures show Pending evaluation.</p>
+        <div className="mt-4 overflow-x-auto">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Measure</th>
+                <th>What it means</th>
+                <th>Classical ML</th>
+                <th>Quantum ML</th>
+                <th>Full system</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.label}>
+                  <td className="font-semibold">{row.label}</td>
+                  <td className="text-slate-600">{row.help}</td>
+                  {row.values.map((value, index) => (
+                    <td key={index} className={value === PENDING ? "text-slate-500" : "font-semibold"}>
+                      {value}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <article className="panel">
+          <h3 className="section-title">Where these numbers come from</h3>
+          <dl className="mt-3 flex flex-col gap-3 text-sm">
+            <div>
+              <dt className="font-semibold">Test data</dt>
+              <dd className="text-slate-600">
+                {synthetic
+                  ? "Synthetic records generated for this project. They are not real patients."
+                  : data.data_source ?? PENDING}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-semibold">How it was scored</dt>
+              <dd className="text-slate-600">
+                {proxy
+                  ? "A local proxy scorer. The official challenge evaluator was not used."
+                  : data.evaluation_kind ?? PENDING}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-semibold">Real hospital data (MIMIC-IV-ED)</dt>
+              <dd className="text-slate-600">
+                {system.data.mimic_iv_ed ?? PENDING} It needs credentialed access from{" "}
+                <a
+                  className="font-semibold text-sky-700 underline"
+                  href={system.data.mimic_iv_ed_source ?? "https://physionet.org/content/mimic-iv-ed/"}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  PhysioNet
+                </a>
+                . Nothing is downloaded automatically.
+              </dd>
+            </div>
+            {data.generated_at ? (
+              <div>
+                <dt className="font-semibold">Report generated</dt>
+                <dd className="text-slate-600">{new Date(data.generated_at).toLocaleString()}</dd>
+              </div>
+            ) : null}
           </dl>
-          <p className="mt-3 text-xs">
-            A full confusion matrix and per-class triage table are Pending evaluation. True negatives appear only when the report stores them.
-          </p>
         </article>
-        <article className="card">
-          <h3 className="font-semibold">Quantum ML</h3>
-          <p className="text-sm">
-            {system.data.quantum_available ? "Simulator artefact present." : "Quantum ML unavailable."} {system.data.quantum_role}
-          </p>
-          <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
-            <Metric label="Emergency recall" value={shown(quantum, "emergency_recall")} />
-            <Metric label="Emergency precision" value={shown(quantum, "emergency_precision")} />
-            <Metric label="Missed emergencies" value={shown(quantum, "missed_emergencies")} />
-            <Metric label="False alerts" value={shown(quantum, "false_alerts")} />
+
+        <article className="panel">
+          <h3 className="section-title">Words used on this page</h3>
+          <dl className="glossary">
+            <div>
+              <dt>Held-out test</dt>
+              <dd>Records kept aside and never used for training, so the score is not memorised.</dd>
+            </div>
+            <div>
+              <dt>False alarm</dt>
+              <dd>A non-emergency flagged as urgent. Safe for the patient, but it uses nurse time.</dd>
+            </div>
+            <div>
+              <dt>Simulator</dt>
+              <dd>Quantum ML runs on ordinary computers that imitate a quantum circuit. No speedup is claimed.</dd>
+            </div>
+            <div>
+              <dt>Sent to a nurse without a guess</dt>
+              <dd>When the input is too incomplete, the system says "Cannot assess, send to nurse now".</dd>
+            </div>
           </dl>
-          <p className="mt-3 text-sm">
-            Experimental. It does not make the live decision and cannot lower urgency.
-          </p>
         </article>
       </div>
-      <article className="card">
-        <h3 className="font-semibold">Dataset</h3>
-        <dl className="mt-3 grid gap-2 text-sm md:grid-cols-2">
-          <Metric label="Report data source" value={data.data_source ?? "Pending evaluation."} />
-          <Metric label="Evaluation kind" value={data.evaluation_kind ?? "Pending evaluation."} />
-          <Metric label="Processed manifest" value={system.data.data_source ?? "Pending evaluation."} />
-          <Metric label="MIMIC-IV-ED" value={system.data.mimic_iv_ed ?? "Pending evaluation."} />
-          <Metric label="MIMIC-IV-ED source" value={system.data.mimic_iv_ed_source ?? "https://physionet.org/content/mimic-iv-ed/"} />
-          <Metric label="Classical runtime p50 ms" value={nested(runtime, "classical", "p50_ms")} />
-          <Metric label="Quantum runtime p50 ms" value={nested(runtime, "quantum", "p50_ms")} />
-        </dl>
-        <p className="mt-3 text-xs">
-          MIMIC-IV-ED requires credentialed PhysioNet access. The prepare command inspects a local folder and does not download the files. Temperature is documented as Fahrenheit and is not converted. No emergency label is created from that source.
-        </p>
-      </article>
     </section>
   );
 }

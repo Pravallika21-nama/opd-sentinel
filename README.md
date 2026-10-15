@@ -43,29 +43,49 @@ Complaints can be typed in any script. The red-flag lexicon covers English, Hind
 
 Synthetic complaints are generated in those languages and marked `record_source=synthetic`.
 
-## Quick start
+## Run the website
 
-Requirements: Python 3.11+, Node.js 22+, GNU make.
+Requirements: Python 3.12, Node.js 22+. GNU make is optional. These commands are for PowerShell from the repository root.
 
-```bash
-make setup
-make data
-make train
-make eval
-make test
-make demo
+One-time setup:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,ml]"
+cd frontend
+npm ci
+cd ..
 ```
 
-In two terminals:
+Stop any running dashboard (`npm run dev`, Ctrl+C) before `npm ci`. If `npm ci` stops with `EPERM` on `lightningcss.win32-x64-msvc.node`, a running dashboard has that file open, and the failed run has already removed part of `node_modules`. Stop the process that holds port 5173, then run `npm ci` again before `npm run dev`.
 
-```bash
-make api
-make web
+Start the API in one terminal. Leave it running:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Open http://127.0.0.1:5173 . Intake, Queue, Rules, Evaluation, and API status are in the header. Illustrative cases are labelled "Example, not a real clinical outcome".
+Start the dashboard in a second terminal. `npm` has to run inside `frontend`. There is no `package.json` in the repository root:
 
-`make data` prints split sizes and emergency prevalence. It does not print a model score. `make train` prints **validation** recall, missed emergencies, and asymmetric cost. It does not read the test split. `make eval` is the only command that scores the test split.
+```powershell
+cd frontend
+npm run dev
+```
+
+Open http://127.0.0.1:5173 . The API is http://127.0.0.1:8000 . The sidebar has Nurse Station, Live Triage, Priority Queue, Patient Records, Doctor Review, Quantum & AI Research, Rules & Safety, Audit Log, and Configuration. Illustrative cases are labelled "Example, not a real patient."
+
+A fresh clone has no trained models until you build the dataset and train. From the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\make_synthetic.py
+.\.venv\Scripts\python.exe -m ml.train
+.\.venv\Scripts\python.exe -m eval.evaluate
+```
+
+`make_synthetic.py` prints split sizes and emergency prevalence. It does not print a model score. Training prints **validation** recall, missed emergencies, and asymmetric cost. It does not read the test split. `eval.evaluate` is the command that scores the test split. Until `reports/results.json` exists, Quantum & AI Research shows **Pending evaluation**.
+
+If `make` is installed, the same steps are `make setup`, `make api`, `make web`, `make data`, `make train`, and `make eval`. `make api` and `make web` still need two terminals.
 
 Docker:
 

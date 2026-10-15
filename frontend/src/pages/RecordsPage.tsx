@@ -53,7 +53,7 @@ export function RecordsPage({
   return (
     <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
       <section className="panel">
-        <h1 className="text-lg font-semibold">{t.records}</h1>
+        <h2 className="section-title">Encounters</h2>
         <p className="mt-1 text-sm">Synthetic and illustrative encounters are labelled. This is not a full chart.</p>
         <ul className="mt-3 flex flex-col gap-1">
           {(queue.data ?? []).map((item) => (

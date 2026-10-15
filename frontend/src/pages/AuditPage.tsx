@@ -16,7 +16,7 @@ export function AuditPage({ onOpen }: { onOpen: (id: string) => void }) {
 
   return (
     <section>
-      <h1 className="text-xl font-semibold">{t.auditNav}</h1>
+      <h2 className="section-title">Every triage and review, in order</h2>
       <p className="mt-2 max-w-3xl text-sm">
         Rows are appended and are not edited by this application. The log is append-only within the
         application's database permissions. It is not cryptographically immutable.

@@ -42,7 +42,7 @@ export function QueuePage({ onOpen }: { onOpen: (id: string) => void }) {
   return (
     <section className="flex flex-col gap-4">
       <div className="card">
-      <h1 className="text-xl font-semibold">Priority Queue</h1>
+      <h2 className="section-title">How the queue is ordered</h2>
       <p className="mt-1 max-w-3xl text-sm">
         Higher urgency is ahead of ordinary arrival order. Within the same level, earlier arrival is ahead.
         {` ${t.waitUnavailable}.`}

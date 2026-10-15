@@ -17,7 +17,7 @@ from core.config_loader import load_settings
 from core.paths import repo_root
 from ml.classical import fit_classical
 from ml.dataset import load_split
-from ml.predict import artifact_path
+from ml.predict import artifact_path, load_classical
 from ml.quantum import fit_quantum
 
 MODEL_VERSION = "0.1.0"
@@ -47,7 +47,11 @@ def _write(bundle: Any, artifact_key: str, meta_key: str) -> None:
 
 
 def main() -> None:
-    """Train Classical ML, then the Quantum ML experiment."""
+    """Train Classical ML, then the Quantum ML experiment.
+
+    `--quantum-only` keeps the saved Classical ML artefact and reuses its
+    training-split medians.
+    """
     _configure_stdio()
     settings = load_settings()
     seed = int(settings["random_seed"])
@@ -57,6 +61,15 @@ def main() -> None:
     data_hash = _sha256(train_path)
     print("OPD Sentinel training")
     print(f"Train rows: {len(train)}. Validation rows: {len(val)}. Test split: not loaded.")
+    if "--quantum-only" in sys.argv[1:]:
+        existing = load_classical()
+        if existing is None or existing.builder is None:
+            raise RuntimeError("--quantum-only needs a trained Classical ML artefact")
+        if existing.metadata.get("data_sha256") != data_hash:
+            raise RuntimeError("Classical ML artefact was trained on a different train split")
+        print("Classical ML: kept as saved (--quantum-only).")
+        _train_quantum(train, val, existing.builder.medians, seed, settings, data_hash)
+        return
     classical_cfg = settings["classical"]
     classical = fit_classical(
         train,
@@ -93,15 +106,24 @@ def main() -> None:
         f"missed={combined['missed_emergencies']}, "
         f"asymmetric cost={combined['cost']}"
     )
-    print("Quantum ML: simulator only (default.qubit). No speedup or advantage is assumed.")
     if classical.builder is None:
         raise RuntimeError("Classical ML feature builder is missing")
+    _train_quantum(train, val, classical.builder.medians, seed, settings, data_hash)
+
+
+def _train_quantum(
+    train: Any,
+    val: Any,
+    medians: dict[str, float],
+    seed: int,
+    settings: dict[str, Any],
+    data_hash: str,
+) -> None:
+    print("Quantum ML: simulator only (default.qubit). No speedup or advantage is assumed.")
     quantum = fit_quantum(
         train,
         val,
-        medians=classical.builder.medians,
-        continuous_train=classical.builder.continuous_matrix(train),
-        continuous_val=classical.builder.continuous_matrix(val),
+        medians=medians,
         seed=seed,
         config=settings["quantum"],
     )

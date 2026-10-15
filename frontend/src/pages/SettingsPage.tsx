@@ -25,7 +25,6 @@ export function SettingsPage() {
 
   return (
     <div className="flex max-w-3xl flex-col gap-4">
-      <h1 className="text-xl font-semibold">{t.settings}</h1>
       <section className="panel">
         <h2 className="font-semibold">Interface language</h2>
         <p className="text-sm">Draft labels only. Product names stay in English. Not a clinical translation.</p>

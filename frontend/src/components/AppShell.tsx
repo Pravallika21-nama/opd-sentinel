@@ -12,18 +12,34 @@ export type Page =
   | "audit"
   | "settings";
 
-const locales: Locale[] = ["en", "hi", "te"];
+const locales: { id: Locale; label: string }[] = [
+  { id: "en", label: "English" },
+  { id: "hi", label: "हिन्दी (Hindi)" },
+  { id: "te", label: "తెలుగు (Telugu)" },
+];
 
 const descriptions: Record<Page, string> = {
-  home: "Current station. Arrival counts and the waiting queue are separate.",
-  live: "Enter the complaint as spoken. A recommendation is not a confirmed decision.",
+  home: "Who needs Nurse Review next, and how busy the station is today.",
+  live: "Enter what the patient tells you. OPD Sentinel suggests a level. You make the decision.",
   queue: "Ordered by safety-adjusted urgency, then earlier arrival.",
   records: "Stored intake, model suggestion, and Nurse Review.",
   doctor: "Cases a nurse has already decided, grouped for the doctor. This view does not change urgency.",
-  evaluation: "Classical ML, experimental Quantum ML, and dataset status. Missing figures stay pending.",
+  evaluation: "How well each model found emergencies on a held-out test, explained in plain language.",
   rules: "Safety rules can keep or raise urgency. They cannot downgrade it.",
   audit: "Append-only record of triage and Nurse Review.",
   settings: "Language, display, and what this station can see.",
+};
+
+const sections: Record<Page, string> = {
+  home: "Nurse workspace",
+  live: "Nurse workspace",
+  queue: "Nurse workspace",
+  records: "Nurse workspace",
+  doctor: "Doctor handoff",
+  evaluation: "Research",
+  rules: "Safety",
+  audit: "System",
+  settings: "System",
 };
 
 const icons: Record<Page, string> = {
@@ -49,6 +65,39 @@ function Heart() {
   );
 }
 
+function msToNextMinute() {
+  return 60000 - (Date.now() % 60000);
+}
+
+function Clock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    let timer = window.setTimeout(function tick() {
+      setNow(new Date());
+      timer = window.setTimeout(tick, msToNextMinute());
+    }, msToNextMinute());
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className="clock">
+      <span className="clock-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </span>
+      <time dateTime={now.toISOString()} className="leading-tight">
+        <span className="clock-time">
+          {now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+        </span>
+        <span className="clock-date">
+          {now.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} · Local time
+        </span>
+      </time>
+    </div>
+  );
+}
+
 export function AppShell({
   page,
   onNavigate,
@@ -59,11 +108,6 @@ export function AppShell({
   children: ReactNode;
 }) {
   const { t, locale, setLocale, compact } = useLocale();
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 30000);
-    return () => window.clearInterval(timer);
-  }, []);
 
   const workspaces: { id: Page; label: string }[] = [
     { id: "home", label: t.home },
@@ -92,7 +136,7 @@ export function AppShell({
         <svg viewBox="0 0 24 24" className="nav-icon" aria-hidden="true">
           <path d={icons[item.id]} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        {item.label}
+        <span className="nav-label">{item.label}</span>
       </button>
     );
   }
@@ -103,53 +147,49 @@ export function AppShell({
         Skip to content
       </a>
       <aside className="sidebar flex flex-col lg:min-h-screen">
-        <div className="flex items-center gap-3 px-4 py-5">
+        <div className="brand-row">
           <span className="brand-mark">
             <Heart />
           </span>
-          <div>
-            <p className="text-base font-semibold leading-tight">OPD Sentinel</p>
-            <p className="text-xs text-sky-200">Clinical support</p>
+          <div className="nav-fade">
+            <p className="text-base font-bold leading-tight">OPD Sentinel</p>
+            <p className="text-xs text-slate-500">Triage decision support</p>
           </div>
         </div>
-        <p className="nav-kicker">Workspaces</p>
-        <nav className="flex gap-1 overflow-x-auto px-3 lg:flex-col" aria-label="Main">
+        <p className="nav-kicker">
+          <span className="nav-fade">Workspaces</span>
+        </p>
+        <nav className="nav-group flex gap-1 overflow-x-auto px-3 lg:flex-col" aria-label="Main">
           {workspaces.map(itemButton)}
         </nav>
-        <p className="nav-kicker mt-4">System</p>
-        <div className="flex gap-1 overflow-x-auto px-3 pb-4 lg:flex-col">{system.map(itemButton)}</div>
-        <p className="mt-auto hidden px-4 py-4 text-xs leading-relaxed text-sky-200 lg:block">
-          Decision support only. A nurse confirms every recommendation.
+        <p className="nav-kicker mt-4">
+          <span className="nav-fade">System</span>
         </p>
+        <div className="nav-group flex gap-1 overflow-x-auto px-3 pb-4 lg:flex-col">{system.map(itemButton)}</div>
+        <p className="sidebar-note nav-fade">Decision support only. A nurse confirms every recommendation.</p>
       </aside>
       <div className="min-w-0">
         <header className="topbar">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              {page === "doctor" ? "Doctor handoff" : "Nurse station"}
-            </p>
-            <h1 className="text-xl font-semibold">{current?.label ?? "OPD Sentinel"}</h1>
+            <p className="topbar-kicker">{sections[page]}</p>
+            <h1 className="text-xl font-bold tracking-tight">{current?.label ?? "OPD Sentinel"}</h1>
             <p className="text-sm text-slate-500">{descriptions[page]}</p>
           </div>
           <div className="flex items-center gap-3">
-            <p className="text-sm font-semibold tabular-nums">
-              {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-            </p>
-            <div className="flex gap-2" role="group" aria-label="Language">
-              {locales.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={`min-h-10 rounded-full border px-3 text-sm font-semibold ${
-                    item === locale ? "border-action bg-action text-white" : "border-line bg-card"
-                  }`}
-                  aria-pressed={item === locale}
-                  onClick={() => setLocale(item)}
-                >
-                  {item.toUpperCase()}
-                </button>
-              ))}
-            </div>
+            <Clock />
+            <label className="lang-select">
+              <svg viewBox="0 0 24 24" className="lang-icon" aria-hidden="true">
+                <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M3.6 9h16.8M3.6 15h16.8M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span className="sr-only">Language</span>
+              <select value={locale} onChange={(event) => setLocale(event.target.value as Locale)}>
+                {locales.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
         </header>
         <main id="main" className="workspace">

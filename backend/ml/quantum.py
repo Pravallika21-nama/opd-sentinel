@@ -9,6 +9,9 @@ experiment: AngleEmbedding plus StronglyEntanglingLayers, with the PauliZ(0)
 expectation mapped to a risk score. A data re-uploading circuit is implemented
 and left off unless `quantum.data_reupload` is true. The fidelity-kernel helper
 is optional and is not called by training or by the API.
+
+Candidate inputs are age and vitals, each vital's distance from its training
+median, and the red-flag phrase count. Hidden labels are never candidates.
 """
 
 from __future__ import annotations
@@ -20,9 +23,41 @@ import pandas as pd
 
 from core.constants import NUMERIC_FIELDS
 from core.preprocessing import prepare_numeric
+from core.red_flags import find_red_flags
 from core.schemas import ModelView
 from core.validation import validate_intake
+from ml.dataset import iter_intakes
 from ml.thresholds import tune_threshold
+
+DEVIATION_SUFFIX = "_deviation"
+THRESHOLD_GRID = np.linspace(0.01, 0.99, 99)
+
+
+def candidate_features(intake: dict[str, Any], medians: dict[str, float]) -> dict[str, float]:
+    """Numeric candidates for one intake. Missing or implausible vitals take the median."""
+    prepared = prepare_numeric(validate_intake(intake), medians)
+    row = {name: float(prepared[name]) for name in NUMERIC_FIELDS}
+    for name in NUMERIC_FIELDS:
+        row[f"{name}{DEVIATION_SUFFIX}"] = abs(row[name] - float(medians.get(name, 0.0)))
+    complaint = intake.get("complaint")
+    row["red_flag_count"] = float(
+        len(find_red_flags(None if complaint is None else str(complaint)))
+    )
+    return row
+
+
+def candidate_matrix(
+    frame: pd.DataFrame, medians: dict[str, float]
+) -> tuple[np.ndarray, list[str]]:
+    """Candidate matrix for a split, with column names."""
+    rows = [candidate_features(intake, medians) for intake in iter_intakes(frame)]
+    names = list(rows[0].keys())
+    return np.asarray([[row[name] for name in names] for row in rows], dtype=np.float64), names
+
+
+def base_field(name: str) -> str:
+    """Measurement a candidate comes from, so one measurement fills at most one qubit."""
+    return name.removesuffix(DEVIATION_SUFFIX)
 
 
 class QuantumBundle:
@@ -47,8 +82,8 @@ class QuantumBundle:
 
     def predict_intake(self, intake: dict[str, Any]) -> ModelView:
         """Risk score from the simulator. Not a calibrated probability."""
-        prepared = prepare_numeric(validate_intake(intake), self.medians)
-        raw = np.asarray([prepared[name] for name in self.feature_names], dtype=np.float64)
+        row = candidate_features(intake, self.medians)
+        raw = np.asarray([row[name] for name in self.feature_names], dtype=np.float64)
         risk = self.risk(self.scale_row(raw))
         level = 2 if risk >= self.threshold else 4
         return ModelView(level=level, p_emergency=risk, department=None)
@@ -101,13 +136,26 @@ def quantum_kernel_matrix(features: np.ndarray) -> np.ndarray:
     return kernel
 
 
+def select_features(mutual: np.ndarray, names: list[str], n_features: int) -> list[int]:
+    """Highest mutual information first, at most one candidate per measurement."""
+    chosen: list[int] = []
+    used: set[str] = set()
+    for index in np.argsort(mutual)[::-1]:
+        base = base_field(names[int(index)])
+        if base in used:
+            continue
+        chosen.append(int(index))
+        used.add(base)
+        if len(chosen) == n_features:
+            break
+    return chosen
+
+
 def fit_quantum(
     train: pd.DataFrame,
     val: pd.DataFrame,
     *,
     medians: dict[str, float],
-    continuous_train: np.ndarray,
-    continuous_val: np.ndarray,
     seed: int,
     config: dict[str, Any],
 ) -> QuantumBundle:
@@ -121,11 +169,13 @@ def fit_quantum(
     n_features = int(config["n_features"])
     n_layers = int(config["n_layers"])
     data_reupload = bool(config["data_reupload"])
-    mutual = mutual_info_classif(continuous_train, y_train, random_state=seed)
-    chosen = np.argsort(mutual)[::-1][:n_features]
-    feature_names = [NUMERIC_FIELDS[int(index)] for index in chosen]
-    raw_train = continuous_train[:, chosen]
-    raw_val = continuous_val[:, chosen]
+    candidates_train, candidate_names = candidate_matrix(train, medians)
+    candidates_val, _ = candidate_matrix(val, medians)
+    mutual = mutual_info_classif(candidates_train, y_train, random_state=seed)
+    chosen = select_features(mutual, candidate_names, n_features)
+    feature_names = [candidate_names[index] for index in chosen]
+    raw_train = candidates_train[:, chosen]
+    raw_val = candidates_val[:, chosen]
     mins = raw_train.min(axis=0)
     maxs = raw_train.max(axis=0)
 
@@ -144,14 +194,11 @@ def fit_quantum(
         min_positive=int(config["min_positive_train"]),
         seed=seed,
     )
-    x_watch, y_watch = _subsample(
-        x_val,
-        y_val,
-        n_rows=int(config["max_val_rows"]),
-        min_positive=max(4, int(config["min_positive_train"]) // 2),
-        seed=seed + 1,
-    )
-    sample_weight = np.where(y_fit == 1, 20.0, 1.0).astype(np.float64)
+    # Balanced weights on the enriched subsample. The 20x under-triage cost is
+    # applied when the threshold is tuned on validation, not twice.
+    n_pos = max(1, int(y_fit.sum()))
+    n_neg = max(1, int(len(y_fit) - n_pos))
+    sample_weight = np.where(y_fit == 1, n_neg / n_pos, 1.0).astype(np.float64)
     sample_weight = sample_weight / sample_weight.mean()
 
     rng = np.random.default_rng(seed)
@@ -197,18 +244,20 @@ def fit_quantum(
 
             weights, loss_value = optimiser.step_and_cost(cost, weights)
             losses.append(float(loss_value))
-        watch_cost = _proxy_cost(circuit, np.array(weights), x_watch, y_watch)
+        epoch_risk = _risks(circuit, np.array(weights), x_val)
+        _threshold, epoch_stats = tune_threshold(y_val, epoch_risk, grid=THRESHOLD_GRID)
+        watch_cost = float(epoch_stats["cost"])
         curve.append(
             {
                 "epoch": float(epoch),
                 "mean_batch_bce": float(np.mean(losses)) if losses else 0.0,
-                "val_subsample_cost": watch_cost,
+                "val_cost_at_tuned_threshold": watch_cost,
             }
         )
         print(
             f"Quantum ML epoch {epoch + 1}/{epochs}: "
             f"batch BCE {curve[-1]['mean_batch_bce']:.4f}, "
-            f"validation-subsample cost {watch_cost:.1f}"
+            f"validation cost {watch_cost:.1f}"
         )
         if watch_cost + 1e-6 < best_cost:
             best_cost = watch_cost
@@ -217,7 +266,7 @@ def fit_quantum(
         else:
             waits += 1
             if waits >= patience:
-                print("Quantum ML early stop on the validation subsample.")
+                print("Quantum ML early stop on validation cost.")
                 break
 
     bundle = QuantumBundle()
@@ -227,13 +276,8 @@ def fit_quantum(
     bundle.maxs = np.asarray(maxs, dtype=np.float64)
     bundle.weights = best_weights
     bundle.data_reupload = data_reupload
-    val_risk = np.asarray(
-        [
-            float(np.clip((1.0 - _expval(circuit, best_weights, row)) / 2.0, 0.0, 1.0))
-            for row in x_val
-        ]
-    )
-    threshold, stats = tune_threshold(y_val, val_risk)
+    val_risk = _risks(circuit, best_weights, x_val)
+    threshold, stats = tune_threshold(y_val, val_risk, grid=THRESHOLD_GRID)
     bundle.threshold = threshold
     bundle.metadata = {
         "path": "Quantum ML",
@@ -248,9 +292,11 @@ def fit_quantum(
         },
         "data_reupload": data_reupload,
         "kernel_variant_trained": False,
+        "n_qubits": n_features,
+        "candidate_features": candidate_names,
         "train_subsample_rows": int(len(x_fit)),
         "train_subsample_positives": int(y_fit.sum()),
-        "val_subsample_rows": int(len(x_watch)),
+        "val_rows": int(len(x_val)),
         "epochs_ran": len(curve),
         "loss_curve": curve,
         "threshold": threshold,
@@ -299,19 +345,10 @@ def _expval(circuit: Any, weights: np.ndarray, features: np.ndarray) -> float:
     )
 
 
-def _proxy_cost(
-    circuit: Any, weights: np.ndarray, features: np.ndarray, labels: np.ndarray
-) -> float:
-    """20x under-triage plus 1x over-triage at a fixed 0.5 cutoff. Validation only."""
-    if len(labels) == 0:
-        return 0.0
-    risks = np.asarray(
+def _risks(circuit: Any, weights: np.ndarray, features: np.ndarray) -> np.ndarray:
+    return np.asarray(
         [float(np.clip((1.0 - _expval(circuit, weights, row)) / 2.0, 0.0, 1.0)) for row in features]
     )
-    predicted = risks >= 0.5
-    missed = int(((labels == 1) & ~predicted).sum())
-    false_alerts = int(((labels == 0) & predicted).sum())
-    return 20.0 * missed + 1.0 * false_alerts
 
 
 def _subsample(

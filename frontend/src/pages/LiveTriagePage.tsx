@@ -29,9 +29,18 @@ const empty = {
 };
 
 const vitalNames = [
+  ["systolic_bp", "systolic", "mmHg"],
+  ["diastolic_bp", "diastolic", "mmHg"],
   ["pulse", "pulse", "bpm"],
   ["temperature_c", "temp", "°C"],
   ["spo2", "spo2", "%"],
+] as const;
+
+const sexOptions = [
+  ["", "Not recorded"],
+  ["female", "Female"],
+  ["male", "Male"],
+  ["other", "Other"],
 ] as const;
 
 function hint(name: string, raw: string, ranges: Ranges | undefined): string {
@@ -114,157 +123,192 @@ export function LiveTriagePage() {
   }
 
   const issues = result?.validation_issues ?? [];
+  const sexChoices = sexOptions.some(([value]) => value === form.sex)
+    ? sexOptions
+    : [...sexOptions, [form.sex, form.sex] as const];
+
+  function clearAll() {
+    setForm(empty);
+    setBanner(null);
+    setResult(null);
+  }
 
   return (
-    <div className="triage-workspace">
+    <div className="triage-layout">
       <form className="panel" onSubmit={onSubmit}>
-        <h1 className="text-lg font-semibold">{t.live}</h1>
-        <p className="mt-1 text-sm">
-          Missing fields can be left blank. The original entry is kept. The complaint is stored as typed.
+        <h2 className="section-title">Patient intake</h2>
+        <p className="section-sub">
+          Leave a field blank if it was not measured. Entries are stored exactly as typed.
         </p>
-        {banner ? <p className="mt-2 rounded-md border border-amber bg-amber/10 px-3 py-2 text-sm font-semibold">{banner}</p> : null}
-        <fieldset className="mt-4">
-          <legend className="text-sm font-semibold">Patient / encounter</legend>
-          <p className="text-xs">The OPD number is assigned by the server when this case is stored.</p>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <label className="text-sm font-semibold">
-              {t.sex}
-              <input className="field mt-1 w-full" value={form.sex} onChange={(event) => setForm({ ...form, sex: event.target.value })} />
-            </label>
-            <label className="text-sm font-semibold">
-              {t.age}
-              <input className="field mt-1 w-full" inputMode="decimal" value={form.age} onChange={(event) => setForm({ ...form, age: event.target.value })} />
-            </label>
-          </div>
-        </fieldset>
-        <fieldset className="mt-4">
-          <legend className="text-sm font-semibold">Vital signs</legend>
-          <p className="text-xs">Blank is allowed. The original entry is kept.</p>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <label className="text-sm font-semibold" htmlFor="systolic_bp">
-              {t.systolic} (mmHg)
-              <input id="systolic_bp" className="field mt-1 w-full" inputMode="decimal" value={form.systolic_bp} onChange={(event) => setForm({ ...form, systolic_bp: event.target.value })} />
-            </label>
-            <label className="text-sm font-semibold" htmlFor="diastolic_bp">
-              {t.diastolic} (mmHg)
-              <input id="diastolic_bp" className="field mt-1 w-full" inputMode="decimal" value={form.diastolic_bp} onChange={(event) => setForm({ ...form, diastolic_bp: event.target.value })} />
-            </label>
-          </div>
-          {vitalNames.map(([name, label, unit]) => {
-            const reported = statusOf(issues, name);
-            const status = reported || (result && form[name].trim() ? "ok" : "");
-            const typedHint = hint(name, form[name], ranges.data);
-            const message = status ? statusLabel(status) : typedHint;
-            return (
-              <div key={name}>
-                <label className="text-sm font-semibold" htmlFor={name}>
-                  {t[label]} ({unit})
-                </label>
-                <input
-                  id={name}
-                  className="field mt-1 w-full"
-                  inputMode="decimal"
-                  value={form[name]}
-                  aria-describedby={message ? `${name}-status` : undefined}
-                  onChange={(event) => setForm({ ...form, [name]: event.target.value })}
-                />
-                {message ? (
-                  <p
-                    id={`${name}-status`}
-                    className={`status-note ${status === "implausible" || status === "conflicting" ? "is-alert" : ""}`}
-                  >
-                    {message}
-                    {status && typedHint ? `. ${typedHint}` : ""}
-                  </p>
-                ) : null}
-              </div>
-            );
-          })}
-        </fieldset>
-        <fieldset className="mt-4">
-          <legend className="text-sm font-semibold">Complaint and history</legend>
-          <div className="mt-2">
-          <label className="flex flex-col gap-1 text-sm font-semibold" htmlFor="complaint">
-            {t.complaint}
-            <input
-              id="complaint"
-              className="field"
-              value={form.complaint}
-              placeholder="As the patient speaks"
-              onChange={(event) => setForm({ ...form, complaint: event.target.value })}
-            />
-          </label>
-          <p className="mt-1 text-xs font-normal">
-            Any script is accepted. Examples: chest pain, seene mein dard, gunde noppi.
-          </p>
-        </div>
-        <label className="mt-2 flex flex-col gap-1 text-sm font-semibold">
-          {t.conditions}
-          <input className="field" value={form.known_conditions} onChange={(event) => setForm({ ...form, known_conditions: event.target.value })} />
-        </label>
-        <label className="mt-2 flex flex-col gap-1 text-sm font-semibold">
-          {t.medications}
-          <input className="field" value={form.medications} onChange={(event) => setForm({ ...form, medications: event.target.value })} />
-        </label>
-        </fieldset>
-        <div className="mt-3 flex flex-col gap-2">
-          <button type="submit" className="btn-primary w-full">{t.assess}</button>
-          <button
-            type="button"
-            className="btn-secondary w-full"
-            onClick={() => {
-              setForm(empty);
-              setBanner(null);
-              setResult(null);
-            }}
-          >
-            {t.clear}
-          </button>
-        </div>
-        {submit.isPending ? <p role="status">{t.loading}</p> : null}
-        {submit.isError ? <p role="alert">{submit.error.message}</p> : null}
-        {demoMode ? (
-          <details className="mt-4">
-            <summary className="cursor-pointer text-sm font-semibold">{t.examples}</summary>
-            <p className="text-xs">Example, not a real clinical outcome.</p>
-            <div className="mt-2 flex flex-col gap-1">
+
+        {demoMode && (demos.data?.cases ?? []).length > 0 ? (
+          <div className="mt-4 rounded-xl bg-sky-50 px-4 py-3">
+            <p className="text-sm font-semibold text-sky-900">Try an example (not a real patient)</p>
+            <div className="mt-2 flex flex-wrap gap-2">
               {(demos.data?.cases ?? []).map((item) => (
-                <button key={item.id} type="button" className="btn-secondary text-left" onClick={() => fill(item.intake)}>
+                <button key={item.id} type="button" className="chip" onClick={() => fill(item.intake)}>
                   {item.title}
                 </button>
               ))}
             </div>
-          </details>
+          </div>
         ) : null}
+        {banner ? <p className="notice mt-3">{banner}</p> : null}
+
+        <fieldset className="form-section">
+          <legend className="form-section-title">Patient</legend>
+          <div className="field-grid">
+            <label className="field-label">
+              {t.sex}
+              <select className="field" value={form.sex} onChange={(event) => setForm({ ...form, sex: event.target.value })}>
+                {sexChoices.map(([value, label]) => (
+                  <option key={value || "none"} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field-label">
+              {t.age}
+              <input className="field" inputMode="decimal" value={form.age} onChange={(event) => setForm({ ...form, age: event.target.value })} />
+            </label>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">The OPD number is assigned when the case is stored.</p>
+        </fieldset>
+
+        <fieldset className="form-section">
+          <legend className="form-section-title">Vital signs</legend>
+          <div className="field-grid is-vitals">
+            {vitalNames.map(([name, label, unit]) => {
+              const reported = statusOf(issues, name);
+              const status = reported || (result && form[name].trim() ? "ok" : "");
+              const typedHint = hint(name, form[name], ranges.data);
+              const message = status ? statusLabel(status) : typedHint;
+              const tone = status === "implausible" || status === "conflicting"
+                ? "is-alert"
+                : status === "ok" ? "" : "is-hint";
+              return (
+                <div key={name}>
+                  <label className="field-label" htmlFor={name}>
+                    {t[label]}
+                    <span className="input-unit">
+                      <input
+                        id={name}
+                        className="field"
+                        inputMode="decimal"
+                        value={form[name]}
+                        aria-describedby={message ? `${name}-status` : undefined}
+                        onChange={(event) => setForm({ ...form, [name]: event.target.value })}
+                      />
+                      <span aria-hidden="true">{unit}</span>
+                    </span>
+                  </label>
+                  {message ? (
+                    <p id={`${name}-status`} className={`status-note ${tone}`}>
+                      {message}
+                      {status && typedHint ? `. ${typedHint}` : ""}
+                    </p>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </fieldset>
+
+        <fieldset className="form-section">
+          <legend className="form-section-title">Complaint and history</legend>
+          <label className="field-label mt-3" htmlFor="complaint">
+            {t.complaint}
+            <textarea
+              id="complaint"
+              className="field min-h-20"
+              value={form.complaint}
+              placeholder="As the patient speaks, in any language"
+              onChange={(event) => setForm({ ...form, complaint: event.target.value })}
+            />
+          </label>
+          <p className="mt-1 text-xs text-slate-500">
+            Any script is accepted. For example: chest pain, seene mein dard, gunde noppi.
+          </p>
+          <div className="field-grid">
+            <label className="field-label">
+              {t.conditions}
+              <input className="field" value={form.known_conditions} onChange={(event) => setForm({ ...form, known_conditions: event.target.value })} />
+            </label>
+            <label className="field-label">
+              {t.medications}
+              <input className="field" value={form.medications} onChange={(event) => setForm({ ...form, medications: event.target.value })} />
+            </label>
+          </div>
+        </fieldset>
+
+        <div className="form-section flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-slate-500">The result is a suggestion. It is not a confirmed decision.</p>
+          <div className="flex gap-2">
+            <button type="button" className="btn-secondary" onClick={clearAll}>
+              {t.clear}
+            </button>
+            <button type="submit" className="btn-primary px-6" disabled={submit.isPending}>
+              {submit.isPending ? t.loading : t.assess}
+            </button>
+          </div>
+        </div>
+        {submit.isError ? <p role="alert" className="mt-2 text-sm text-alert">{submit.error.message}</p> : null}
       </form>
 
-      <section className="panel min-w-0" aria-live="polite">
-        <h2 className="text-lg font-semibold">Assessment and safety review</h2>
-        <p className="text-sm">This is the model and Safety-Rule recommendation. It is not a nurse-confirmed decision.</p>
-        {result?.opd_number ? <p className="mt-2 text-2xl font-semibold">{result.opd_number}</p> : null}
-        {result?.case_id ? (
-          <p className="text-sm">Internal encounter ID: {result.case_id}</p>
-        ) : (
-          <p className="mt-2 text-sm">The result appears here after submit.</p>
-        )}
-        {result ? <div className="mt-3"><ResultCard result={result} /></div> : null}
-      </section>
-
-      <div>
-        {result?.case_id ? (
-          <NurseActions
-            caseId={result.case_id}
-            suggestedLevel={result.triage_level}
-            department={result.department}
-            abstain={result.abstain}
-          />
+      <aside className={result ? "triage-side" : "triage-side is-sticky"} aria-live="polite">
+        {result ? (
+          <>
+            <section className="panel min-w-0">
+              <p className="topbar-kicker">Suggestion, not a decision</p>
+              {result.opd_number ? <p className="opd-number mt-1">{result.opd_number}</p> : null}
+              {result.case_id ? <p className="text-xs text-slate-500">Internal encounter ID: {result.case_id}</p> : null}
+              <div className="mt-4">
+                <ResultCard result={result} />
+              </div>
+            </section>
+            {result.case_id ? (
+              <NurseActions
+                caseId={result.case_id}
+                suggestedLevel={result.triage_level}
+                department={result.department}
+                abstain={result.abstain}
+              />
+            ) : null}
+          </>
         ) : (
           <section className="panel">
-            <h2 className="text-base font-semibold">{t.actions}</h2>
-            <p className="mt-2 text-sm">Confirm, override, escalate, or request reassessment after an assessment.</p>
+            <h2 className="section-title">How this works</h2>
+            <ol className="steps">
+              <li className="step">
+                <span className="step-num">1</span>
+                <div>
+                  <p className="font-semibold">Enter what you have</p>
+                  <p className="text-sm text-slate-600">Vitals and the complaint in the patient's own words. Blank fields are fine.</p>
+                </div>
+              </li>
+              <li className="step">
+                <span className="step-num">2</span>
+                <div>
+                  <p className="font-semibold">OPD Sentinel checks it</p>
+                  <p className="text-sm text-slate-600">It flags unusual vitals, applies the safety rules, and suggests a triage level and department.</p>
+                </div>
+              </li>
+              <li className="step">
+                <span className="step-num">3</span>
+                <div>
+                  <p className="font-semibold">You decide</p>
+                  <p className="text-sm text-slate-600">Confirm, override, or escalate. Every action is written to the audit log.</p>
+                </div>
+              </li>
+            </ol>
+            <p className="callout mt-4 text-sm">
+              Safety rules can only raise urgency. If the input cannot be assessed, you will see
+              "Cannot assess, send to nurse now".
+            </p>
           </section>
         )}
-      </div>
+      </aside>
     </div>
   );
 }

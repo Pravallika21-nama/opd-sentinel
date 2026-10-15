@@ -47,12 +47,14 @@ def tune_threshold(
     *,
     under: float = 20.0,
     over: float = 1.0,
+    grid: np.ndarray | None = None,
 ) -> tuple[float, dict[str, float | int | None]]:
     """Pick a probability cutoff on validation scores by asymmetric cost.
 
     Ties prefer higher recall, then a lower threshold (more sensitive).
     """
-    grid = np.linspace(0.05, 0.95, 19)
+    if grid is None:
+        grid = np.linspace(0.05, 0.95, 19)
     best_threshold = 0.5
     best_key: tuple[float, float, float] | None = None
     best_stats: dict[str, float | int | None] = {}
